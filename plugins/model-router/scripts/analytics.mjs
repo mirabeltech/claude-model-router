@@ -23,6 +23,7 @@
  */
 
 import { loadConfig } from '../lib/config.mjs'
+import { ROUTER_VERSION } from '../lib/version.mjs'
 import { analyze, stringifyResponse } from '../lib/analytics/index.mjs'
 import { renderText } from '../lib/analytics/text.mjs'
 
@@ -58,6 +59,7 @@ function parseArgs(argv) {
         'verbose',
         'now',
         'help',
+        'version',
       ].includes(a.slice(2)),
   )
   if (unknown.length > 0) return { usage: `unknown option${unknown.length > 1 ? 's' : ''}: ${unknown.join(' ')}` }
@@ -84,6 +86,7 @@ function parseArgs(argv) {
 
   return {
     help: flag('help'),
+    version: flag('version'),
     json: flag('json'),
     color: !flag('no-color'),
     verbose: flag('verbose'),
@@ -125,8 +128,14 @@ Output
   --no-color           plain text
   --verbose            include classes and buckets that are empty
   --now <instant>      treat this instant as now, for reproducible windows
+  --version            print the router version and exit
+  --help               print this and exit
 
-Exit codes: 0 on any successful read, 2 on a bad invocation.
+Exit codes:
+  0  on any successful read. There is deliberately NO failure exit: an empty or
+     unpriced store is the shipped state and a result, not an error, so a
+     pipeline that runs this does not break on a fresh install.
+  2  bad invocation.
 `
 
 /**
@@ -149,6 +158,12 @@ export async function runAnalytics({
   }
   if (args.help) {
     log(USAGE.trim())
+    return 0
+  }
+  // Answered before the store is touched: the version of a marketplace install is otherwise
+  // unaskable, and it is the first thing a bug report needs.
+  if (args.version) {
+    log(ROUTER_VERSION)
     return 0
   }
 

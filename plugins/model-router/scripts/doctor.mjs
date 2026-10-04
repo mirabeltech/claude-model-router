@@ -2,17 +2,34 @@
 /**
  * router doctor — is this installation actually able to route?
  *
- * Checks config resolution, provider readiness, the telemetry store and (with
- * --live) one real worker call. Prints a report and exits non-zero if anything
- * would stop routing from working.
+ * The primary onboarding command. It checks config resolution, the runtime, what routing will do,
+ * the worker chain, the hook wiring, the telemetry store, analytics tooling, pricing and
+ * governance, and with --live makes one real worker call.
  *
- * It never prints a secret. For an API key it reports only presence, length and
- * a short prefix, so the output is safe to paste into an issue or a chat.
+ * FOUR LEVELS, AND ONLY ONE OF THEM FAILS. `fail` means a misconfiguration with a definite fix,
+ * and is the only level that moves the exit code. `warn` means a DEGRADED router, never a broken
+ * one: the gate fails open on every branch, so every warning state still leaves Claude Code
+ * working exactly as it does without this plugin. `info` is an echo of what is configured rather
+ * than a verdict — it used to be raw dimmed output outside the counters, which made an
+ * observation indistinguishable from a check that had been skipped.
  *
- * Usage:
- *   node scripts/doctor.mjs
- *   node scripts/doctor.mjs --live            # make one real worker call
- *   node scripts/doctor.mjs --live --provider ollama
+ * IT WRITES NOTHING BY DEFAULT. It used to create the telemetry and governance directories in
+ * order to probe them, which meant the first command a new developer ran left state behind and
+ * then reported "store is empty" — having just falsified the thing it was measuring. Writability
+ * is now judged by permission on the nearest existing ancestor, and the output says which of the
+ * two checks it made. `--probe-writes` restores the real write for the cases where `accessSync`
+ * lies: ACLs, network shares, and Windows read-only directories.
+ *
+ * It never prints a secret. For an API key it reports only presence, length and a short prefix,
+ * so the output is safe to paste into an issue — which is what lets the bug-report template ask
+ * for `--json --offline`.
+ *
+ * Severity decisions live in `lib/doctor/report.mjs`, which is pure, so the matrix is unit-tested
+ * rather than only observable through this script's stdout. Everything here gathers and renders;
+ * the interesting judgements are made there.
+ *
+ * Usage: node scripts/doctor.mjs [--live] [--provider <id>] [--json] [--offline]
+ *                               [--probe-writes] [--no-color] [--version] [--help]
  */
 
 import fs from 'node:fs'
@@ -21,14 +38,36 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { loadConfig } from '../lib/config.mjs'
-import { readinessFor, loadProvider, callWorker, providerIds, requiresEnvFor, wantsKey, billingFor } from '../lib/providers/index.mjs'
+import { colors, EXIT, parseFlags } from '../lib/cli.mjs'
+import { ROUTER_VERSION } from '../lib/version.mjs'
+import {
+  apiKeyFinding,
+  describeSecret,
+  fail,
+  info,
+  LEVEL_FROM_GOVERNANCE,
+  nodeFinding,
+  pass,
+  summarize,
+  toJson,
+  warn,
+} from '../lib/doctor/report.mjs'
+import {
+  readinessFor,
+  loadProvider,
+  callWorker,
+  providerIds,
+  requiresEnvFor,
+  wantsKey,
+  billingFor,
+} from '../lib/providers/index.mjs'
 import { resolveWorker } from '../lib/dispatch/index.mjs'
-import { LANE_MODE } from '../lib/routing-policy.mjs'
+import { LANE_MODE, POLICY_VERSION } from '../lib/routing-policy.mjs'
 import { bundledCapabilityFor, resolveCapability } from '../lib/providers/capability.mjs'
 import { FETCH_HEADERS_TIMEOUT_MS } from '../lib/providers/contract.mjs'
 import { computeContextBudget, estimateTokensFromBytes } from '../lib/context-budget.mjs'
 import { describeGovernance } from '../lib/governance/policy.mjs'
-import { probeWritable, readState } from '../lib/governance/ledger.mjs'
+import { checkWritable, probeWritable, readState } from '../lib/governance/ledger.mjs'
 import { resolveSinkId } from '../lib/telemetry/index.mjs'
 import { readSegmentsSync } from '../lib/telemetry/jsonl.mjs'
 import { loadPricing } from '../lib/telemetry/pricing-load.mjs'
@@ -37,49 +76,108 @@ import { unpricedModels } from '../lib/telemetry/pricing-table.mjs'
 /** What Claude Code sets CLAUDE_PLUGIN_ROOT to: the plugin directory, two levels up from here. */
 const PLUGIN_ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
 
-const argv = process.argv.slice(2)
-const flag = (name) => argv.includes(`--${name}`)
-const opt = (name, dflt = null) => {
-  const i = argv.indexOf(`--${name}`)
-  return i === -1 || !argv[i + 1] || argv[i + 1].startsWith('--') ? dflt : argv[i + 1]
+const USAGE = `Usage: npm run doctor [-- <options>]
+
+Diagnose whether this installation can route, and explain anything that would stop it.
+Writes nothing and creates no directories unless you ask it to.
+
+Options:
+  --live            make one real worker call (costs money on a metered provider)
+  --provider <id>   check this provider instead of the configured one
+  --json            emit the whole report as JSON on stdout
+  --offline         skip the provider capability probe (no network at all)
+  --probe-writes    confirm writability by actually writing, not by asking permission
+  --no-color        no ANSI escapes (also honours NO_COLOR, and pipes are plain already)
+  --version         print the router version and exit
+  --help            print this and exit
+
+Exit codes:
+  0  no failures. Warnings and info never affect this: a fresh install with no worker
+     configured is a working Claude Code install, not a broken one.
+  1  at least one FAIL — a misconfiguration with a definite fix.
+  2  bad invocation.
+
+Network: with neither --offline nor --live, the only request made is the worker capability
+probe, which for Ollama is a localhost call to /api/show.`
+
+const parsed = parseFlags(process.argv.slice(2), {
+  booleans: ['live', 'json', 'offline', 'probe-writes', 'no-color', 'help', 'version'],
+  values: ['provider'],
+})
+
+if (parsed.errors.length > 0) {
+  for (const e of parsed.errors) console.error(e)
+  console.error('\nTry: npm run doctor -- --help')
+  process.exit(EXIT.USAGE)
+}
+// Honoured before any config load, any I/O and any network call.
+if (parsed.flags.help) {
+  console.log(USAGE)
+  process.exit(EXIT.OK)
+}
+if (parsed.flags.version) {
+  console.log(ROUTER_VERSION)
+  process.exit(EXIT.OK)
+}
+if (parsed.flags.live && parsed.flags.offline) {
+  console.error('--live and --offline contradict each other')
+  process.exit(EXIT.USAGE)
 }
 
-const GREEN = '\x1b[32m'
-const RED = '\x1b[31m'
-const YELLOW = '\x1b[33m'
-const DIM = '\x1b[2m'
-const OFF = '\x1b[0m'
+const wantJson = parsed.flags.json
+const wantLive = parsed.flags.live
+const offline = parsed.flags.offline
+const probeWrites = parsed.flags['probe-writes']
+// --json is a machine channel, so it is never coloured.
+const C = colors({
+  noColor: parsed.flags['no-color'] || wantJson,
+  env: process.env,
+  isTTY: process.stdout.isTTY === true,
+})
 
-let failures = 0
-let warnings = 0
+/* ------------------------------------------------------------- accumulation */
+
+/** Sections are built as DATA, so the text and JSON renderers cannot disagree about findings. */
+const sections = []
+function section(id, title) {
+  const s = { id, title, findings: [], note: [] }
+  sections.push(s)
+  return s
+}
+
+/** Read a JSON file, or null. Used for the manifests, where absence is normal, not an error. */
+function readJson(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'))
+  } catch {
+    return null
+  }
+}
 
 /**
- * Whether the pricing chain carries a single usable rate.
+ * Is a directory writable, judged WITHOUT creating it?
  *
- * Set by the Pricing section and read by Governance. The bundled table ships EVERY rate as null,
- * so this is false out of the box — which is precisely why a configured dollar budget warns
- * instead of silently appearing to work.
+ * Walks to the nearest existing ancestor and asks for permission. The telemetry twin of
+ * `checkWritable()` in the governance ledger, and the reason doctor no longer materialises a
+ * store in order to describe one.
  */
-let anyRateKnown = false
+function dirWritable(dir) {
+  let at = dir
+  for (let depth = 0; depth < 64; depth++) {
+    if (fs.existsSync(at)) break
+    const up = path.dirname(at)
+    if (up === at) break
+    at = up
+  }
+  try {
+    fs.accessSync(at, fs.constants.W_OK)
+    return { ok: true, reason: null, checkedAt: at }
+  } catch (err) {
+    return { ok: false, reason: err?.code ?? 'not_writable', checkedAt: at }
+  }
+}
 
-function ok(label, detail = '') {
-  console.log(`  ${GREEN}OK${OFF}    ${label}${detail ? `  ${DIM}${detail}${OFF}` : ''}`)
-}
-function warn(label, detail = '') {
-  warnings++
-  console.log(`  ${YELLOW}WARN${OFF}  ${label}${detail ? `  ${DIM}${detail}${OFF}` : ''}`)
-}
-function fail(label, detail = '') {
-  failures++
-  console.log(`  ${RED}FAIL${OFF}  ${label}${detail ? `  ${DIM}${detail}${OFF}` : ''}`)
-}
-/**
- * The budget in one phrase, for the configuration summary line.
- *
- * "none configured" is the honest wording for every-limit-null, and that is the shipped state.
- * The old summary printed `$5/day` from a default that was never enforced by anything, which
- * told the operator they had a budget when they had neither a budget nor an enforcer.
- */
+/** The budget in one phrase. "none configured" is the honest wording for every-limit-null. */
 function budgetSummary(budget) {
   if (budget?.enabled !== true) return 'governance off'
   const parts = []
@@ -91,153 +189,214 @@ function budgetSummary(budget) {
   return parts.length === 0 ? 'none configured' : parts.join(' ')
 }
 
-function section(title) {
-  console.log(`\n${title}\n${'-'.repeat(68)}`)
-}
-
-/**
- * Describe a secret without revealing it. Enough to tell "set, looks like a
- * Gemini key, 39 chars" from "set to an empty string" or "set to a shell
- * expansion that never expanded" — the three failures people actually hit.
- */
-function describeSecret(value) {
-  if (value === undefined) return { state: 'absent' }
-  if (value === '') return { state: 'empty' }
-  const v = String(value)
-  if (/^\$|^%.*%$|^\$\{/.test(v)) return { state: 'unexpanded', detail: 'looks like a literal shell expansion' }
-  return {
-    state: 'present',
-    detail: `${v.length} chars, starts "${v.slice(0, 4)}…"`,
-  }
-}
-
-/* ------------------------------------------------------------------- report */
-
-console.log('router doctor')
-
 const { config, warnings: configWarnings, sources, coherence: configCoherence } = loadConfig()
 
-section('Configuration')
-ok('config resolved', `project: ${config.projectDir}`)
-if (configWarnings.length === 0) {
-  ok('no configuration warnings')
-} else {
-  for (const w of configWarnings) {
-    // An unknown field is a typo worth surfacing; a rejected value is worse.
-    const isTypo = w.reason === 'unknown field, ignored'
-    ;(isTypo ? warn : fail)(`${w.field}`, `${w.scope}: ${w.reason}`)
+/* ------------------------------------------------------------------ project */
+
+/**
+ * Identity, not verdicts. "Which copy of the plugin am I even running" is unanswerable today
+ * when somebody has both a marketplace install and a --plugin-dir checkout, and it is the first
+ * thing a bug report needs.
+ */
+{
+  const s = section('project', 'Project')
+  const manifest = readJson(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'))
+  const pkg = readJson(path.resolve(PLUGIN_ROOT, '..', '..', 'package.json'))
+
+  if (pkg?.name) s.findings.push(info(`repo ${pkg.name} ${pkg.version ?? '?'}`))
+  s.findings.push(info(`plugin ${manifest?.name ?? 'model-router'} ${manifest?.version ?? ROUTER_VERSION}`))
+  s.findings.push(info('plugin root', PLUGIN_ROOT))
+
+  // A heuristic, and labelled as one. The installed layout is not a documented contract.
+  const marketplaceish = /[\\/]\.claude[\\/]plugins[\\/]/.test(PLUGIN_ROOT)
+  s.findings.push(
+    info(
+      `install mode ${marketplaceish ? 'marketplace' : 'repo checkout or --plugin-dir'}`,
+      'inferred from the plugin path, which is not a documented contract',
+    ),
+  )
+  s.findings.push(info(`node ${process.versions.node} on ${process.platform} ${os.release()}`))
+  // Deliberately NOT a compatibility verdict. A script is not told which Claude Code launched it,
+  // and "a configured value is never a measured capability" applies to a version string too.
+  s.findings.push(
+    info('Claude Code version not detectable from a script', 'run /model-router:doctor inside a session, or see claude --version'),
+  )
+}
+
+/* ------------------------------------------------------------ configuration */
+
+{
+  const s = section('configuration', 'Configuration')
+  s.findings.push(pass('config resolved', `project: ${config.projectDir}`))
+  if (configWarnings.length === 0) {
+    s.findings.push(pass('no configuration warnings'))
+  } else {
+    for (const w of configWarnings) {
+      // An unknown field is a typo worth surfacing; a rejected value is worse.
+      const isTypo = w.reason === 'unknown field, ignored'
+      s.findings.push((isTypo ? warn : fail)(`${w.field}`, `${w.scope}: ${w.reason}`))
+    }
   }
-}
-
-if (!config.enabled) {
-  warn('routing is DISABLED', 'enabled=false (or CMR_ENABLED=0) — the gate will allow every read')
-} else {
-  ok('routing enabled')
-}
-
-console.log(
-  `  ${DIM}worker: ${config.worker.provider}/${config.worker.model}` +
-    `  bulkRead: ${config.routing.bulkRead.enforce} >${config.routing.bulkRead.minLines} lines` +
-    `  budget: ${budgetSummary(config.budget)}${OFF}`,
-)
-const overridden = Object.entries(sources).filter(([, s]) => s !== 'user')
-if (overridden.length > 0) {
-  console.log(`  ${DIM}overrides: ${overridden.map(([f, s]) => `${f}<-${s}`).join(', ')}${OFF}`)
+  s.findings.push(
+    info(
+      `worker ${config.worker.provider}/${config.worker.model}`,
+      `budget: ${budgetSummary(config.budget)}`,
+    ),
+  )
+  const overridden = Object.entries(sources).filter(([, src]) => src !== 'user')
+  if (overridden.length > 0) {
+    s.findings.push(info('overrides', overridden.map(([f, src]) => `${f}<-${src}`).join(', ')))
+  } else {
+    s.findings.push(info('no overrides', 'every setting is at its bundled default'))
+  }
 }
 
 /* ------------------------------------------------------------------ runtime */
 
-section('Runtime')
-const [major, minor] = process.versions.node.split('.').map(Number)
-if (major > 22 || (major === 22 && minor >= 5)) {
-  ok(`node ${process.versions.node}`, 'node:sqlite available')
-} else {
-  fail(`node ${process.versions.node}`, 'node 22.5+ required for node:sqlite')
+{
+  const s = section('runtime', 'Runtime')
+  s.findings.push(nodeFinding({ version: process.versions.node }))
+  if (typeof globalThis.fetch === 'function') s.findings.push(pass('global fetch available'))
+  else s.findings.push(fail('global fetch missing', 'node 18+ required'))
 }
-ok(`platform ${process.platform}`, os.release())
-if (typeof globalThis.fetch === 'function') ok('global fetch available')
-else fail('global fetch missing', 'node 18+ required')
+
+/* ------------------------------------------------------------------ routing */
+
+/** What the gate will actually do. Echoes, not verdicts, apart from the kill switch. */
+{
+  const s = section('routing', 'Routing')
+  if (!config.enabled) {
+    s.findings.push(
+      warn('routing is DISABLED', 'enabled=false (or CMR_ENABLED=0) — the gate allows every read'),
+    )
+  } else {
+    s.findings.push(pass('routing enabled'))
+  }
+  s.findings.push(info(`policy version ${POLICY_VERSION}`))
+
+  const br = config.routing.bulkRead
+  s.findings.push(
+    info(
+      `bulk-read gate: enforce=${br.enforce}`,
+      `>=${br.minLines} lines OR >=${br.minBytes} bytes, files ${br.minFiles}..${br.maxFiles}`,
+    ),
+  )
+  s.findings.push(
+    info(
+      `code-write gate: enforce=${config.routing.codeWrite.enforce}`,
+      'advisory — no interception ships for this lane yet',
+    ),
+  )
+  // INFO, not WARN: this is a deliberate operator choice either way, and INFO is precisely the
+  // level that was missing. The detail states what leaves the machine.
+  const intent = config.hooks?.taskIntent?.source ?? 'none'
+  s.findings.push(
+    info(
+      `task intent: ${intent}`,
+      intent === 'none'
+        ? 'the worker gets a fixed generic task; nothing from your session leaves the machine'
+        : `your newest prompt is sent to the worker, clamped to ${config.hooks.taskIntent.maxChars} chars and redacted`,
+    ),
+  )
+  s.findings.push(
+    info(
+      'never delegated',
+      `targeted reads, recently-edited files, and ${config.routing.denyGlobs.length} deny glob(s)`,
+    ),
+  )
+}
 
 /* ----------------------------------------------------------------- provider */
 
-section('Worker provider')
-const providerId = opt('provider', config.worker.provider)
-if (providerId !== config.worker.provider) {
-  console.log(`  ${DIM}(overridden on the command line: ${providerId})${OFF}`)
-}
-
-if (!providerIds().includes(providerId)) {
-  fail(`unknown provider "${providerId}"`, `known: ${providerIds().join(', ')}`)
-} else {
-  ok(`provider "${providerId}" is registered`)
-
-  let mod = null
-  try {
-    mod = await loadProvider(providerId)
-    ok('provider module satisfies the contract')
-    console.log(
-      `  ${DIM}maxInputBytes=${mod.capabilities.maxInputBytes}` +
-        ` reportsUsage=${mod.capabilities.reportsUsage}` +
-        ` thinkingTokens=${mod.capabilities.reportsThinkingTokens}${OFF}`,
-    )
-  } catch (err) {
-    fail('provider module failed to load', err.message)
+const providerId = parsed.values.provider ?? config.worker.provider
+{
+  const s = section('worker-provider', 'Worker provider')
+  if (providerId !== config.worker.provider) {
+    s.findings.push(info('provider overridden on the command line', providerId))
   }
 
-  // Key presence, never the key itself — and checked against the workers a LANE will actually
-  // resolve to, not against `worker.provider`.
-  //
-  // THE PHASE-8 DEFECT. This block used to read `config.worker.apiKeyEnv` alone, which defaults
-  // to GEMINI_API_KEY because `worker.provider` defaults to gemini. It was wrong in both
-  // directions, and both were measured:
-  //
-  //   - `workers.*.provider = ollama` with `worker.*` left at its defaults FAILED on an absent
-  //     GEMINI_API_KEY and exited 1, reporting a perfectly healthy local install as broken, for
-  //     want of a key no lane would ever send.
-  //   - `worker.provider = ollama` with `workers.bulkRead.provider = gemini` said "no API key
-  //     required" and never checked at all, so the one lane that did need a key failed at its
-  //     first delegation instead of here.
-  //
-  // `wantsKey()` is the authority on whether a key is wanted and `resolveWorker()` on which
-  // provider each lane names. Nothing else can answer this: the global provider is not the set
-  // of providers that will run.
-  const laneWorkers = Object.keys(LANE_MODE).map((lane) => ({ lane, ...resolveWorker(config, lane) }))
-  const keyed = new Map()
-  for (const w of laneWorkers) {
-    if (!providerIds().includes(w.provider) || !wantsKey(w.provider)) continue
-    // A lane that names a provider but no key of its own falls back to the provider's own
-    // requirement, which is what readinessFor() would use.
-    const env = w.apiKeyEnv ?? requiresEnvFor(w.provider)?.[0] ?? null
-    if (env === null) continue
-    if (!keyed.has(env)) keyed.set(env, [])
-    keyed.get(env).push(LANE_MODE[w.lane])
-  }
+  if (!providerIds().includes(providerId)) {
+    s.findings.push(fail(`unknown provider "${providerId}"`, `known: ${providerIds().join(', ')}`))
+  } else {
+    s.findings.push(pass(`provider "${providerId}" is registered`))
 
-  if (keyed.size === 0) {
-    const local = [...new Set(laneWorkers.map((w) => w.provider))].join(', ')
-    ok('no API key required', `every lane runs a local provider (${local})`)
-  }
-  for (const [keyEnv, modes] of keyed) {
-    const who = `needed by ${modes.join(', ')}`
-    const s = describeSecret(process.env[keyEnv])
-    if (s.state === 'present') ok(`${keyEnv} is set`, `${s.detail}, ${who}`)
-    else if (s.state === 'empty') fail(`${keyEnv} is set but empty`, who)
-    else if (s.state === 'unexpanded') fail(`${keyEnv} looks wrong`, `${s.detail}, ${who}`)
+    let mod = null
+    try {
+      mod = await loadProvider(providerId)
+      s.findings.push(pass('provider module satisfies the contract'))
+      s.findings.push(
+        info(
+          'provider capabilities',
+          `maxInputBytes=${mod.capabilities.maxInputBytes} reportsUsage=${mod.capabilities.reportsUsage}` +
+            ` thinkingTokens=${mod.capabilities.reportsThinkingTokens}`,
+        ),
+      )
+    } catch (err) {
+      s.findings.push(fail('provider module failed to load', err.message))
+    }
+
+    // Key presence, never the key itself — and checked against the workers a LANE will actually
+    // resolve to, not against `worker.provider`.
+    //
+    // THE PHASE-8 DEFECT. This block used to read `config.worker.apiKeyEnv` alone, which defaults
+    // to GEMINI_API_KEY because `worker.provider` defaults to gemini. It was wrong in both
+    // directions, and both were measured:
+    //
+    //   - `workers.*.provider = ollama` with `worker.*` left at its defaults FAILED on an absent
+    //     GEMINI_API_KEY and exited 1, reporting a healthy local install as broken, for want of a
+    //     key no lane would ever send.
+    //   - `worker.provider = ollama` with `workers.bulkRead.provider = gemini` said "no API key
+    //     required" and never checked, so the one lane that needed a key failed at its first
+    //     delegation instead of here.
+    //
+    // `wantsKey()` is the authority on whether a key is wanted and `resolveWorker()` on which
+    // provider each lane names. Nothing else can answer this.
+    const laneWorkers = Object.keys(LANE_MODE).map((lane) => ({ lane, ...resolveWorker(config, lane) }))
+    const keyed = new Map()
+    for (const w of laneWorkers) {
+      if (!providerIds().includes(w.provider) || !wantsKey(w.provider)) continue
+      const env = w.apiKeyEnv ?? requiresEnvFor(w.provider)?.[0] ?? null
+      if (env === null) continue
+      if (!keyed.has(env)) keyed.set(env, [])
+      keyed.get(env).push(LANE_MODE[w.lane])
+    }
+
+    if (keyed.size === 0) {
+      const local = [...new Set(laneWorkers.map((w) => w.provider))].join(', ')
+      s.findings.push(pass('no API key required', `every lane runs a local provider (${local})`))
+    }
+    // Did ANY layer name a provider, or is this the shipped default? That is what decides whether
+    // a missing key is a misconfiguration or simply an install nobody has set up yet.
+    const providerConfigured =
+      sources['worker.provider'] !== undefined ||
+      sources['workers.bulkRead.provider'] !== undefined ||
+      sources['workers.codeWrite.provider'] !== undefined ||
+      sources['worker.apiKeyEnv'] !== undefined
+    for (const [keyEnv, modes] of keyed) {
+      s.findings.push(
+        apiKeyFinding({
+          keyEnv,
+          modes,
+          secret: describeSecret(process.env[keyEnv]),
+          configured: providerConfigured,
+          platform: process.platform,
+        }),
+      )
+    }
+
+    // Readiness for the globally-configured provider, under the same `wantsKey` guard: a supplied
+    // name REPLACES the provider's own requiresEnv, so forwarding it to a provider that needs no
+    // key would make a healthy local daemon look unavailable.
+    const r = readinessFor(providerId, process.env, {
+      apiKeyEnv: wantsKey(providerId) ? config.worker.apiKeyEnv : undefined,
+    })
+    if (r.ready) s.findings.push(pass('provider readiness: ready', 'the gate can route'))
     else {
-      fail(`${keyEnv} is not set`, `${who}; ` + (process.platform === 'win32'
-        ? `setx ${keyEnv} "your-key" then restart Claude Code`
-        : `export ${keyEnv}=your-key`))
+      s.findings.push(
+        warn('provider readiness: NOT ready', `${r.reason} — the gate fails open and allows reads`),
+      )
     }
   }
-
-  // Readiness for the globally-configured provider, under the same `wantsKey` guard: a supplied
-  // name REPLACES the provider's own requiresEnv, so forwarding it to a provider that needs no
-  // key would make a healthy local daemon look unavailable.
-  const r = readinessFor(providerId, process.env, {
-    apiKeyEnv: wantsKey(providerId) ? config.worker.apiKeyEnv : undefined,
-  })
-  if (r.ready) ok('provider readiness: ready', 'the gate can route')
-  else warn('provider readiness: NOT ready', `${r.reason} — the gate will fail open and allow reads`)
 }
 
 /* -------------------------------------------------------------- worker modes */
@@ -245,24 +404,34 @@ if (!providerIds().includes(providerId)) {
 /**
  * Which worker each mode actually resolves to.
  *
- * This is the only place a typo in `workers.<lane>.provider` is ever caught: the value is a free
+ * The only place a typo in `workers.<lane>.provider` is ever caught: the value is a free
  * non-empty string as far as the config spec is concerned, so `"gemnii"` loads without a single
  * warning and then fails at the first delegation.
  */
-section('Worker modes')
-for (const [lane, mode] of Object.entries(LANE_MODE)) {
-  const r = resolveWorker(config, lane)
-  const inherited = r.inheritedProvider ? 'inherits worker.provider' : `workers.${lane}.provider`
-  if (!providerIds().includes(r.provider)) {
-    fail(`${mode}: unknown provider "${r.provider}"`, `known: ${providerIds().join(', ')}`)
-  } else if (r.model === null) {
-    warn(`${mode}: ${r.provider} with no model resolved`, `set workers.${lane}.model or providers.${r.provider}.model`)
-  } else {
-    // `r.apiKeyEnv` is inherited whenever the provider was, so it still names GEMINI_API_KEY for
-    // a lane running Ollama. Printing that verbatim implies a key is wanted; `wantsKey()` is what
-    // decides whether one is.
-    const key = wantsKey(r.provider) ? (r.apiKeyEnv ?? 'none configured') : 'none required'
-    ok(`${mode}: ${r.provider}/${r.model}`, `${inherited}, timeoutMs=${r.timeoutMs}, key=${key}`)
+{
+  const s = section('worker-modes', 'Worker modes')
+  for (const [lane, mode] of Object.entries(LANE_MODE)) {
+    const r = resolveWorker(config, lane)
+    const inherited = r.inheritedProvider ? 'inherits worker.provider' : `workers.${lane}.provider`
+    if (!providerIds().includes(r.provider)) {
+      s.findings.push(
+        fail(`${mode}: unknown provider "${r.provider}"`, `known: ${providerIds().join(', ')}`),
+      )
+    } else if (r.model === null) {
+      s.findings.push(
+        warn(
+          `${mode}: ${r.provider} with no model resolved`,
+          `set workers.${lane}.model or providers.${r.provider}.model`,
+        ),
+      )
+    } else {
+      // `r.apiKeyEnv` is inherited whenever the provider was, so it still names GEMINI_API_KEY for
+      // a lane running Ollama. Printing that verbatim implies a key is wanted; `wantsKey()` decides.
+      const key = wantsKey(r.provider) ? (r.apiKeyEnv ?? 'none configured') : 'none required'
+      s.findings.push(
+        pass(`${mode}: ${r.provider}/${r.model}`, `${inherited}, timeoutMs=${r.timeoutMs}, key=${key}`),
+      )
+    }
   }
 }
 
@@ -271,142 +440,169 @@ for (const [lane, mode] of Object.entries(LANE_MODE)) {
 /**
  * Can the resolved worker actually hold the prompts we intend to send it?
  *
- * This section may use the network, unlike the gate: doctor is an interactive diagnostic that the
+ * This section may use the network, unlike the gate: doctor is an interactive diagnostic the
  * developer ran on purpose, and for ollama the probe is a localhost round trip measured at about
  * seven milliseconds. The whole value of the section is telling the truth about THIS install, and
- * a bundled table cannot do that.
+ * a bundled table cannot do that. `--offline` skips the probe entirely, which is provider-
+ * agnostic and needs no new status: the capability simply falls to configured, bundled or
+ * unknown, which `statusForSource()` already labels correctly.
  *
  * Everything here is WARN at worst for an undiscoverable window, because an unknown capability
- * leaves a degraded router rather than a broken one — the gate still fails open to plain Claude
- * Code. A provider/model mismatch and an output request that cannot fit are FAIL, because both
- * are misconfigurations with a definite fix.
+ * leaves a degraded router rather than a broken one. A provider/model mismatch and an output
+ * request that cannot fit are FAIL, because both are misconfigurations with a definite fix.
  */
-section('Worker capability')
+{
+  const s = section('worker-capability', 'Worker capability')
 
-// Reported once, from the resolver, so a mismatch is named even when the model never loads.
-// Stated either way: "no mismatch" is a real finding, and a section that is silent when
-// everything is fine cannot be distinguished from a section that forgot to check.
-if (configCoherence.ok) {
-  ok('provider/model coherence', 'every configured worker names a model its provider could own')
-}
-for (const problem of configCoherence.problems) {
-  const where = problem.scope === 'worker' ? 'worker' : `workers.${problem.scope}`
-  if (problem.status === 'mismatch') {
-    fail(`${where}: provider/model mismatch`, problem.reason)
-  } else {
-    warn(`${where}: model unresolved`, problem.reason)
-  }
-}
-
-// A configured timeout the runtime will never honour. Only reachable with a very slow local
-// model, which is exactly who sets a long timeout in the first place.
-for (const [lane, mode] of Object.entries(LANE_MODE)) {
-  const t = resolveWorker(config, lane).timeoutMs
-  if (Number.isInteger(t) && t > FETCH_HEADERS_TIMEOUT_MS) {
-    warn(
-      `${mode}: timeoutMs ${t} exceeds what the runtime will wait`,
-      `the HTTP client gives up at ${FETCH_HEADERS_TIMEOUT_MS}ms, so a slower call fails there and not at ${t}ms`,
+  // Reported either way: "no mismatch" is a real finding, and a section that is silent when
+  // everything is fine cannot be distinguished from one that forgot to check.
+  if (configCoherence.ok) {
+    s.findings.push(
+      pass('provider/model coherence', 'every configured worker names a model its provider could own'),
     )
   }
-}
+  for (const problem of configCoherence.problems) {
+    const where = problem.scope === 'worker' ? 'worker' : `workers.${problem.scope}`
+    if (problem.status === 'mismatch') {
+      // Name the fix. Setting only `worker.provider: ollama` leaves `worker.model` at
+      // gemini-2.5-flash, which is the single most likely way to land here.
+      const owned = config.providers?.[problem.provider]?.model
+      s.findings.push(
+        fail(
+          `${where}: provider/model mismatch`,
+          `${problem.reason}${owned ? ` — set ${where}.model to a model ${problem.provider} owns, e.g. ${owned}` : ''}`,
+        ),
+      )
+    } else {
+      s.findings.push(warn(`${where}: model unresolved`, problem.reason))
+    }
+  }
 
-for (const [lane, mode] of Object.entries(LANE_MODE)) {
-  const r = resolveWorker(config, lane)
-  if (!providerIds().includes(r.provider) || r.model === null) continue // already reported above
+  // A configured timeout the runtime will never honour. Only reachable with a very slow local
+  // model, which is exactly who sets a long timeout in the first place.
+  for (const [lane, mode] of Object.entries(LANE_MODE)) {
+    const t = resolveWorker(config, lane).timeoutMs
+    if (Number.isInteger(t) && t > FETCH_HEADERS_TIMEOUT_MS) {
+      s.findings.push(
+        warn(
+          `${mode}: timeoutMs ${t} exceeds what the runtime will wait`,
+          `the HTTP client gives up at ${FETCH_HEADERS_TIMEOUT_MS}ms, so a slower call fails there and not at ${t}ms`,
+        ),
+      )
+    }
+  }
 
-  const providerConfig = config.providers?.[r.provider] ?? {}
-  let mod = null
-  let capability = null
-  try {
-    mod = await loadProvider(r.provider)
-    const discovered =
-      typeof mod.describeModel === 'function'
-        ? await mod.describeModel({ model: r.model, providerConfig })
-        : null
-    capability = resolveCapability({
+  if (offline) {
+    s.findings.push(
+      info('capability probe skipped', '--offline: no provider was asked, so a discoverable window is not reported'),
+    )
+  }
+
+  for (const [lane, mode] of Object.entries(LANE_MODE)) {
+    const r = resolveWorker(config, lane)
+    if (!providerIds().includes(r.provider) || r.model === null) continue // already reported above
+
+    const providerConfig = config.providers?.[r.provider] ?? {}
+    let mod = null
+    let capability = null
+    try {
+      mod = await loadProvider(r.provider)
+      const discovered =
+        !offline && typeof mod.describeModel === 'function'
+          ? await mod.describeModel({ model: r.model, providerConfig })
+          : null
+      capability = resolveCapability({
+        provider: r.provider,
+        model: r.model,
+        configured: providerConfig.contextTokens ?? null,
+        discovered,
+        bundled: bundledCapabilityFor(r.provider, r.model),
+      })
+    } catch (err) {
+      s.findings.push(warn(`${mode}: capability probe failed`, err?.message ?? 'unknown error'))
+      continue
+    }
+
+    const label = `${mode}: ${r.provider}/${r.model}`
+    const maxOut = config.worker.maxOutputTokens
+
+    if (capability.contextTokens === null) {
+      // NOT a failure. Unknown stays unknown, and the router degrades rather than breaks. Unknown
+      // context is never infinite context, so the detail must not imply a number.
+      const hint =
+        r.provider === 'ollama'
+          ? 'start the daemon so /api/show can answer, or set providers.ollama.contextTokens'
+          : `no context limit is discoverable for ${r.provider} — that is a missing capability, not a fault; delegation proceeds under the byte ceiling`
+      s.findings.push(
+        warn(`${label}: context capability unknown`, `${capability.detail ?? 'no source'} — ${hint}`),
+      )
+      continue
+    }
+
+    // Sized against a prompt that is ONLY the system string plus the task, so this answers "can
+    // this model be used at all" rather than "will some particular file fit".
+    const budget = computeContextBudget({
       provider: r.provider,
       model: r.model,
-      configured: providerConfig.contextTokens ?? null,
-      discovered,
-      bundled: bundledCapabilityFor(r.provider, r.model),
+      capability,
+      requestedInputTokens: estimateTokensFromBytes(1024),
+      requestedOutputTokens: maxOut,
+      contextWindowModel: mod?.capabilities?.contextWindowModel ?? 'unknown',
     })
-  } catch (err) {
-    warn(`${mode}: capability probe failed`, err?.message ?? 'unknown error')
-    continue
-  }
 
-  const label = `${mode}: ${r.provider}/${r.model}`
-  const maxOut = config.worker.maxOutputTokens
-
-  if (capability.contextTokens === null) {
-    // NOT a failure. Unknown stays unknown, and the router degrades rather than breaks.
-    // The remedy depends on the provider: ollama has a configurable window and a daemon to ask,
-    // and nothing else currently has either. Pointing a Gemini user at a leaf that does not
-    // exist, or at a daemon they do not run, would be worse than saying nothing.
-    const hint =
-      r.provider === 'ollama'
-        ? 'start the daemon so /api/show can answer, or set providers.ollama.contextTokens'
-        : `no context limit is discoverable for ${r.provider}; delegation still proceeds under the byte ceiling`
-    warn(`${label}: context capability unknown`, `${capability.detail ?? 'no source'} — ${hint}`)
-    continue
-  }
-
-  // Sized against a prompt that is ONLY the system string plus the task, so this answers "can
-  // this model be used at all" rather than "will some particular file fit".
-  const budget = computeContextBudget({
-    provider: r.provider,
-    model: r.model,
-    capability,
-    requestedInputTokens: estimateTokensFromBytes(1024),
-    requestedOutputTokens: maxOut,
-    contextWindowModel: mod?.capabilities?.contextWindowModel ?? 'unknown',
-  })
-
-  const prov = `${capability.source}/${capability.status}`
-  if (budget.verdict === 'refuse') {
-    fail(
-      `${label}: maxOutputTokens ${maxOut} exceeds the ${capability.contextTokens}-token context`,
-      `${prov}; no safe cap exists — lower worker.maxOutputTokens or choose a model with a larger window`,
-    )
-  } else if (budget.verdict === 'cap_output') {
-    warn(
-      `${label}: context=${capability.contextTokens} (${prov})`,
-      `maxOutputTokens=${maxOut} will be capped to ${budget.allowedOutputTokens}; effectiveInput=${budget.effectiveInputCapacityTokens}`,
-    )
-  } else {
-    ok(
-      `${label}: context=${capability.contextTokens} (${prov})`,
-      `maxOutputTokens=${maxOut}, effectiveInput=${budget.effectiveInputCapacityTokens}${capability.status === 'assumed' ? ', NOT verified against this install' : ''}`,
-    )
+    const prov = `${capability.source}/${capability.status}`
+    if (budget.verdict === 'refuse') {
+      s.findings.push(
+        fail(
+          `${label}: maxOutputTokens ${maxOut} exceeds the ${capability.contextTokens}-token context`,
+          `${prov}; no safe cap exists — lower worker.maxOutputTokens or choose a model with a larger window`,
+        ),
+      )
+    } else if (budget.verdict === 'cap_output') {
+      s.findings.push(
+        warn(
+          `${label}: context=${capability.contextTokens} (${prov})`,
+          `maxOutputTokens=${maxOut} will be capped to ${budget.allowedOutputTokens}; effectiveInput=${budget.effectiveInputCapacityTokens}`,
+        ),
+      )
+    } else {
+      s.findings.push(
+        pass(
+          `${label}: context=${capability.contextTokens} (${prov})`,
+          `maxOutputTokens=${maxOut}, effectiveInput=${budget.effectiveInputCapacityTokens}` +
+            `${capability.status === 'assumed' ? ', NOT verified against this install' : ''}`,
+        ),
+      )
+    }
   }
 }
 
 /* --------------------------------------------------------------- hook wiring */
 
-section('Claude Code hook')
-if (config.hooks?.enabled !== true) {
-  warn('hooks.enabled is false', 'nothing is intercepted; routing and telemetry are unaffected')
-} else {
-  ok('hooks.enabled', `timeoutMs=${config.hooks.timeoutMs}`)
-}
-
 {
-  const manifestPath = path.join(PLUGIN_ROOT, 'hooks', 'hooks.json')
-  let manifest = null
-  try {
-    manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
-  } catch (err) {
-    fail('hooks.json is unreadable', err.message)
+  const s = section('hook', 'Claude Code hook')
+  if (config.hooks?.enabled !== true) {
+    s.findings.push(
+      warn('hooks.enabled is false', 'nothing is intercepted; routing and telemetry are unaffected'),
+    )
+  } else {
+    s.findings.push(pass('hooks.enabled', `timeoutMs=${config.hooks.timeoutMs}`))
   }
 
-  if (manifest) {
+  const manifestPath = path.join(PLUGIN_ROOT, 'hooks', 'hooks.json')
+  const manifest = readJson(manifestPath)
+  if (manifest === null) {
+    s.findings.push(fail('hooks.json is unreadable', manifestPath))
+  } else {
     const matchers = manifest.hooks?.PreToolUse
     if (!Array.isArray(matchers) || matchers.length === 0) {
-      fail('no PreToolUse hook is registered', 'hooks.json registers nothing, so no Read is gated')
+      s.findings.push(
+        fail('no PreToolUse hook is registered', 'hooks.json registers nothing, so no Read is gated'),
+      )
     } else {
-      const tools = matchers.map((m) => m.matcher ?? '<all tools>').join(', ')
-      ok(`PreToolUse registered for ${tools}`)
-
+      s.findings.push(
+        pass(`PreToolUse registered for ${matchers.map((m) => m.matcher ?? '<all tools>').join(', ')}`),
+      )
       // A script Claude Code cannot find is the failure mode with no symptom: the hook simply
       // never runs, every Read proceeds, and nothing anywhere says why.
       for (const matcher of matchers) {
@@ -414,122 +610,203 @@ if (config.hooks?.enabled !== true) {
           const target = (handler.args ?? [])[0] ?? handler.command ?? ''
           const resolved = target.replace('${CLAUDE_PLUGIN_ROOT}', PLUGIN_ROOT)
           if (!target.includes('${CLAUDE_PLUGIN_ROOT}')) {
-            warn(`${matcher.matcher}: hook path is not plugin-relative`, target)
+            s.findings.push(warn(`${matcher.matcher}: hook path is not plugin-relative`, target))
           } else if (!fs.existsSync(resolved)) {
-            fail(`${matcher.matcher}: hook script is missing`, resolved)
+            s.findings.push(fail(`${matcher.matcher}: hook script is missing`, resolved))
           } else {
-            ok(`${matcher.matcher}: ${path.basename(resolved)} present`, `timeout=${handler.timeout ?? 'default'}s`)
+            s.findings.push(
+              pass(`${matcher.matcher}: ${path.basename(resolved)} present`, `timeout=${handler.timeout ?? 'default'}s`),
+            )
           }
         }
       }
     }
   }
-}
 
-// The configuration in which a delegation can never finish: the hook abandons the worker call
-// before the worker was ever going to answer, so every read falls open after a wasted wait.
-// Which deadline actually bounds a delegated read. The hook's budget is DESIGNED to be the
-// tighter of the two — worker.timeoutMs defaults to three minutes, which is a sane ceiling for a
-// script and an unacceptable one for a tool call someone is waiting on — so a shorter hook
-// deadline is information, not a misconfiguration. Only a budget too small for any worker to
-// answer within is worth a warning.
-if (config.hooks?.enabled === true) {
-  const r = resolveWorker(config, 'bulkRead')
-  const budget = config.hooks.timeoutMs
-  const effective = Math.min(budget ?? Infinity, r.timeoutMs ?? Infinity)
-  if (Number.isInteger(budget) && budget < 5000) {
-    warn(`hooks.timeoutMs is ${budget}ms`, 'few workers answer that fast, so most delegations will fall open')
-  } else if (Number.isFinite(effective)) {
-    ok(`a delegated read is bounded at ${effective}ms`, effective === budget ? 'by hooks.timeoutMs' : 'by the worker timeout')
+  // Which deadline actually bounds a delegated read. The hook's budget is DESIGNED to be the
+  // tighter of the two — worker.timeoutMs defaults to three minutes, a sane ceiling for a script
+  // and an unacceptable one for a tool call someone is waiting on — so a shorter hook deadline is
+  // information, not a misconfiguration. Only a budget too small for any worker is worth a warning.
+  if (config.hooks?.enabled === true) {
+    const r = resolveWorker(config, 'bulkRead')
+    const budget = config.hooks.timeoutMs
+    const effective = Math.min(budget ?? Infinity, r.timeoutMs ?? Infinity)
+    if (Number.isInteger(budget) && budget < 5000) {
+      s.findings.push(
+        warn(`hooks.timeoutMs is ${budget}ms`, 'few workers answer that fast, so most delegations fall open'),
+      )
+    } else if (Number.isFinite(effective)) {
+      s.findings.push(
+        pass(
+          `a delegated read is bounded at ${effective}ms`,
+          effective === budget ? 'by hooks.timeoutMs' : 'by the worker timeout',
+        ),
+      )
+    }
   }
 }
 
 /* ---------------------------------------------------------------- telemetry */
 
-section('Telemetry store')
-if (!config.telemetry.enabled) {
-  warn('telemetry is disabled', 'no events will be recorded')
-} else {
-  const dir = config.telemetry.dirResolved
-  try {
-    fs.mkdirSync(dir, { recursive: true })
-    const probe = path.join(dir, `.doctor-${process.pid}`)
-    fs.writeFileSync(probe, 'probe')
-    fs.unlinkSync(probe)
-    ok('store is writable', dir)
-  } catch (err) {
-    fail('store is NOT writable', `${dir}: ${err.code ?? err.message}`)
-  }
-
-  // SQLite over a network or cloud-synced volume is a documented corruption
-  // risk, and append atomicity is only guaranteed on a local filesystem.
-  const looksRemote = /^\\\\/.test(dir) || /onedrive|dropbox|google drive|box sync/i.test(dir)
-  if (looksRemote && !config.telemetry.shardByPid) {
-    warn('store is on a network or synced volume', 'set telemetry.shardByPid=true for safe concurrent appends')
-  } else if (looksRemote) {
-    ok('store is on a synced volume', 'shardByPid is enabled')
+let storeReport = null
+{
+  const s = section('telemetry', 'Telemetry store')
+  if (!config.telemetry.enabled) {
+    s.findings.push(warn('telemetry is disabled', 'no events will be recorded'))
   } else {
-    ok('store is on a local filesystem', 'single-file appends are safe')
+    const dir = config.telemetry.dirResolved
+    if (probeWrites) {
+      try {
+        fs.mkdirSync(dir, { recursive: true })
+        const probe = path.join(dir, `.doctor-${process.pid}`)
+        fs.writeFileSync(probe, 'probe')
+        fs.unlinkSync(probe)
+        s.findings.push(pass('store is writable (probed by writing)', dir))
+      } catch (err) {
+        s.findings.push(fail('store is NOT writable', `${dir}: ${err.code ?? err.message}`))
+      }
+    } else {
+      const w = dirWritable(dir)
+      if (w.ok) {
+        s.findings.push(
+          pass(
+            'store path is writable (checked by permission, not probed)',
+            `${dir}${w.checkedAt === dir ? '' : ` — nearest existing ancestor: ${w.checkedAt}`}; the directory is created by the first event`,
+          ),
+        )
+        if (process.platform === 'win32') {
+          s.findings.push(
+            info(
+              'Windows reports directory write permission unreliably',
+              'run with --probe-writes to confirm by actually writing',
+            ),
+          )
+        }
+      } else {
+        s.findings.push(fail('store path is NOT writable', `${w.checkedAt}: ${w.reason}`))
+      }
+    }
+
+    // SQLite over a network or cloud-synced volume is a documented corruption risk, and append
+    // atomicity is only guaranteed on a local filesystem.
+    const looksRemote = /^\\\\/.test(dir) || /onedrive|dropbox|google drive|box sync/i.test(dir)
+    if (looksRemote && !config.telemetry.shardByPid) {
+      s.findings.push(
+        warn('store is on a network or synced volume', 'set telemetry.shardByPid=true for safe concurrent appends'),
+      )
+    } else if (looksRemote) {
+      s.findings.push(pass('store is on a synced volume', 'shardByPid is enabled'))
+    } else {
+      s.findings.push(pass('store is on a local filesystem', 'single-file appends are safe'))
+    }
+
+    s.findings.push(
+      info(
+        'telemetry settings',
+        `sink=${config.telemetry.sink} privacy=${config.telemetry.privacyLevel}` +
+          ` avoidedMethod=${config.telemetry.avoidedMethod}` +
+          ` provenOnly=${config.telemetry.countProvenFilesOnly}` +
+          ` residency=${config.telemetry.residencyTurns}(${config.telemetry.residencySource})`,
+      ),
+    )
+
+    // The sink the config asked for is not always the sink that runs.
+    const resolved = resolveSinkId(config.telemetry.sink)
+    if (resolved.fellBackFrom) {
+      s.findings.push(warn(`sink "${resolved.fellBackFrom}" is not implemented`, resolved.warning))
+    }
+
+    // rotation=none makes retention a complete no-op. A real trap, and cheap to catch.
+    if (config.telemetry.rotation === 'none') {
+      s.findings.push(
+        warn(
+          'rotation is "none", so retention can never prune',
+          `retentionDays=${config.telemetry.retentionDays} has no effect on an undated segment`,
+        ),
+      )
+    }
+
+    // A malformed line in the MIDDLE of a segment is field-detectable evidence that append
+    // atomicity failed on this filesystem — the one claim no specification gives us on Windows or
+    // on a network volume. Reading a store that does not exist yields zero lines, not an error.
+    const { report } = readSegmentsSync({ dir })
+    storeReport = report
+    if (report.lines > 0 && report.skipped.malformed > 0) {
+      s.findings.push(
+        fail(
+          `${report.skipped.malformed} malformed line(s) in the store`,
+          'a mid-file break means appends are not atomic here; set telemetry.shardByPid=true',
+        ),
+      )
+    } else if (report.lines > 0) {
+      s.findings.push(
+        pass(
+          `${report.yielded} event(s) readable, 0 malformed`,
+          report.skipped.truncated_tail > 0
+            ? `${report.skipped.truncated_tail} unterminated tail (a writer was mid-flight)`
+            : 'appends are intact',
+        ),
+      )
+    }
   }
+}
 
-  console.log(
-    `  ${DIM}sink=${config.telemetry.sink} privacy=${config.telemetry.privacyLevel}` +
-      ` avoidedMethod=${config.telemetry.avoidedMethod}` +
-      ` provenOnly=${config.telemetry.countProvenFilesOnly}` +
-      ` residency=${config.telemetry.residencyTurns}(${config.telemetry.residencySource})${OFF}`,
-  )
+/* ---------------------------------------------------------------- analytics */
 
-  // The sink the config asked for is not always the sink that runs. A fallback is reported
-  // in band rather than printed from the hot path, so doctor is where it surfaces.
-  const resolved = resolveSinkId(config.telemetry.sink)
-  if (resolved.fellBackFrom) warn(`sink "${resolved.fellBackFrom}" is not implemented`, resolved.warning)
+/**
+ * Is the reporting chain usable, and is there anything to report?
+ *
+ * "The store is empty" lives here rather than under Telemetry store: an empty store says nothing
+ * about store integrity, and everything about whether analytics has input.
+ */
+{
+  const s = section('analytics', 'Analytics')
+  const analyticsCli = path.join(PLUGIN_ROOT, 'scripts', 'analytics.mjs')
+  if (fs.existsSync(analyticsCli)) s.findings.push(pass('analytics CLI present', 'npm run analytics'))
+  else s.findings.push(warn('analytics CLI missing', analyticsCli))
 
-  // rotation=none makes retention a complete no-op. A real trap, and cheap to catch.
-  if (config.telemetry.rotation === 'none') {
-    warn(
-      'rotation is "none", so retention can never prune',
-      `retentionDays=${config.telemetry.retentionDays} has no effect on an undated segment`,
+  // The dashboard is a SEPARATE, OPTIONAL plugin. Its absence is never a failure.
+  const dashboard = path.resolve(PLUGIN_ROOT, '..', 'router-dashboard', 'scripts', 'report.mjs')
+  if (fs.existsSync(dashboard)) s.findings.push(pass('HTML report available', 'npm run report'))
+  else {
+    s.findings.push(
+      warn(
+        'router-dashboard is not installed',
+        'optional and read-only: claude plugin install router-dashboard@claude-model-router',
+      ),
     )
   }
 
-  // A malformed line in the MIDDLE of a segment is field-detectable evidence that append
-  // atomicity failed on this filesystem — the one claim no specification gives us on Windows
-  // or on a network volume. Worth checking on the developer's actual machine.
-  const { report } = readSegmentsSync({ dir })
-  if (report.lines === 0) {
-    console.log(`  ${DIM}store is empty — nothing delegated yet${OFF}`)
-  } else if (report.skipped.malformed > 0) {
-    fail(
-      `${report.skipped.malformed} malformed line(s) in the store`,
-      'a mid-file break means appends are not atomic here; set telemetry.shardByPid=true',
+  if (storeReport === null) {
+    s.findings.push(info('nothing to report', 'telemetry is disabled, so no window can be summarised'))
+  } else if (storeReport.lines === 0) {
+    s.findings.push(
+      info(
+        'nothing delegated yet',
+        'the store is empty — delegate a read, then run npm run analytics',
+      ),
     )
   } else {
-    ok(
-      `${report.yielded} event(s) readable, 0 malformed`,
-      report.skipped.truncated_tail > 0 ? `${report.skipped.truncated_tail} unterminated tail (a writer was mid-flight)` : 'appends are intact',
-    )
+    s.findings.push(info(`${storeReport.yielded} event(s) available to analytics`))
   }
 }
 
 /* ------------------------------------------------------------------ pricing */
 
-section('Pricing')
+let anyRateKnown = false
 {
+  const s = section('pricing', 'Pricing')
   const { chain, warnings: pricingWarnings } = loadPricing(config)
-  for (const w of pricingWarnings) warn(w.field, w.reason)
+  for (const w of pricingWarnings) s.findings.push(warn(w.field, w.reason))
 
   if (chain.length === 0) {
-    fail('no pricing table is available', 'every cost and savings figure will be NULL')
+    s.findings.push(fail('no pricing table is available', 'every cost and savings figure will be NULL'))
   } else {
     const served = chain.map((e) => `${e.source}@${e.table.pricingVersion}`).join(' -> ')
-    ok(`pricing chain: ${served}`, 'first match wins; tables are never merged')
+    s.findings.push(pass(`pricing chain: ${served}`, 'first match wins; tables are never merged'))
   }
 
-  // The bundled table ships every rate as null on purpose: a confident wrong dollar figure is
-  // worse than a refusal to price. But a null nobody explains reads as a bug, so doctor hands
-  // over the exact snippet to paste.
-  // Hoisted for the Governance section below: "is ANY rate known" is the question a monetary
-  // budget actually depends on, and `chain` is scoped to this block.
+  // "Is ANY rate known" is the question a monetary budget actually depends on.
   anyRateKnown = chain.some((e) =>
     Object.values(e.table.models ?? {}).some(
       (row) => Number.isFinite(row.inputPerMTok) || Number.isFinite(row.outputPerMTok),
@@ -538,30 +815,34 @@ section('Pricing')
 
   const unpriced = chain.flatMap((e) => unpricedModels(e.table))
   if (unpriced.length > 0) {
-    warn(
-      `${unpriced.length} model(s) have no rates`,
-      'token savings are still reported; every DOLLAR figure will be NULL until rates are set',
+    s.findings.push(
+      warn(
+        `${unpriced.length} model(s) have no rates`,
+        'token savings are still reported; every DOLLAR figure stays NULL until rates are set',
+      ),
     )
-    for (const row of unpriced.slice(0, 6)) console.log(`  ${DIM}${row.key} — verify at ${row.verify}${OFF}`)
-    if (unpriced.length > 6) console.log(`  ${DIM}...and ${unpriced.length - 6} more${OFF}`)
-    console.log('')
-    console.log(`  ${DIM}To price them, write a table and point pricing.overrides at it:${OFF}`)
-    console.log(`  ${DIM}{${OFF}`)
-    console.log(`  ${DIM}  "pricingVersion": "my-rates.1", "unit": "per_mtok", "currency": "USD",${OFF}`)
-    console.log(`  ${DIM}  "models": {${OFF}`)
-    console.log(`  ${DIM}    "${unpriced[0].key}": {${OFF}`)
-    console.log(`  ${DIM}      "inputPerMTok": 0.30, "cachedInputPerMTok": 0.075, "outputPerMTok": 2.50,${OFF}`)
-    console.log(`  ${DIM}      "verify": "${unpriced[0].verify}", "verifiedAt": "${new Date().toISOString().slice(0, 10)}"${OFF}`)
-    console.log(`  ${DIM}    }${OFF}`)
-    console.log(`  ${DIM}  }${OFF}`)
-    console.log(`  ${DIM}}${OFF}`)
-  } else {
-    ok('every model in the chain has rates', 'dollar figures will be populated')
-  }
+    for (const row of unpriced.slice(0, 6)) s.findings.push(info(row.key, `verify at ${row.verify}`))
+    if (unpriced.length > 6) s.findings.push(info(`...and ${unpriced.length - 6} more`))
 
-  // The "a budget cannot be enforced without rates" warning used to live here. It moved to the
-  // Governance section below, which is the place that knows WHICH budgets are configured and
-  // whether the resolved worker is even billable.
+    // The bundled table ships every rate null on purpose: a confident wrong dollar figure is
+    // worse than a refusal to price. But a null nobody explains reads as a bug, so hand over the
+    // exact snippet to paste. Kept as a raw block rather than one finding per line — prefixing
+    // nine lines of JSON with INFO would destroy the one property it has.
+    s.note.push(
+      'To price them, write a table and point pricing.overrides at it:',
+      '{',
+      '  "pricingVersion": "my-rates.1", "unit": "per_mtok", "currency": "USD",',
+      '  "models": {',
+      `    "${unpriced[0].key}": {`,
+      '      "inputPerMTok": 0.30, "cachedInputPerMTok": 0.075, "outputPerMTok": 2.50,',
+      `      "verify": "${unpriced[0].verify}", "verifiedAt": "${new Date().toISOString().slice(0, 10)}"`,
+      '    }',
+      '  }',
+      '}',
+    )
+  } else {
+    s.findings.push(pass('every model in the chain has rates', 'dollar figures will be populated'))
+  }
 }
 
 /* ---------------------------------------------------------------- governance */
@@ -570,12 +851,11 @@ section('Pricing')
  * Can the configured budgets actually be enforced, and what is spent right now?
  *
  * The findings come from `describeGovernance()`, which is pure, so the severity matrix is
- * unit-tested rather than only observable through this script's stdout. Everything here
- * renders; nothing here decides.
+ * unit-tested rather than only observable through this script's stdout. Everything here renders;
+ * nothing here decides.
  */
-section('Governance')
-
 {
+  const s = section('governance', 'Governance')
   const workers = []
   for (const [lane, mode] of Object.entries(LANE_MODE)) {
     const r = resolveWorker(config, lane)
@@ -594,15 +874,18 @@ section('Governance')
     workers.push({ mode, provider: r.provider, billing: billingFor(r.provider), reportsUsage })
   }
 
+  // Non-mutating by default, so a default install does not gain a governance directory just by
+  // being asked about one.
+  const stateWritable = probeWrites ? probeWritable(config) : checkWritable(config)
+
   for (const f of describeGovernance({
     limits: config.budget,
     pricingAvailable: anyRateKnown,
-    stateWritable: probeWritable(config),
+    stateWritable,
     workers,
   })) {
-    if (f.level === 'fail') fail(f.label, f.detail)
-    else if (f.level === 'warn') warn(f.label, f.detail)
-    else ok(f.label, f.detail)
+    const level = LEVEL_FROM_GOVERNANCE[f.level] ?? 'info'
+    s.findings.push({ level, label: f.label, detail: f.detail ?? '' })
   }
 
   // Current spend, which is information rather than a check.
@@ -610,22 +893,25 @@ section('Governance')
   if (state.ok && state.state.daily.calls + state.state.monthly.calls > 0) {
     const d = state.state.daily
     const m = state.state.monthly
-    console.log(
-      `  ${DIM}spent today (${state.periods.day}): ${d.totalTokens} tokens, ${d.calls} call(s)` +
-        `  this month (${state.periods.month}): ${m.totalTokens} tokens, ${m.calls} call(s)${OFF}`,
+    s.findings.push(
+      info(
+        'spend so far',
+        `today (${state.periods.day}): ${d.totalTokens} tokens, ${d.calls} call(s);` +
+          ` this month (${state.periods.month}): ${m.totalTokens} tokens, ${m.calls} call(s)` +
+          `${d.costStatus === 'partial' ? ' — cost is a LOWER BOUND: some calls could not be priced' : ''}`,
+      ),
     )
-    if (d.costStatus === 'partial') {
-      console.log(`  ${DIM}cost so far is a LOWER BOUND: some calls could not be priced${OFF}`)
-    }
   } else if (!state.ok && state.reason !== 'no_state_dir') {
-    warn('budget accounting state could not be read', `${state.reason} — spend is unknown, not zero`)
+    s.findings.push(
+      warn('budget accounting state could not be read', `${state.reason} — spend is unknown, not zero`),
+    )
   }
 }
 
 /* --------------------------------------------------------------- live check */
 
-if (flag('live')) {
-  section('Live worker call')
+if (wantLive) {
+  const s = section('live', 'Live worker call')
   const liveConfig = { ...config, worker: { ...config.worker, provider: providerId, maxOutputTokens: 256 } }
   const t0 = Date.now()
   try {
@@ -636,37 +922,86 @@ if (flag('live')) {
         'What does this file export?\n<file path="probe.ts">\nexport class UserService {\n' +
         '  create(name: string) { return { name } }\n}\nexport const VERSION = "1.0"\n</file>',
     })
-    ok(`call succeeded in ${Date.now() - t0}ms`, `attempts=${attempts} model=${result.model}`)
+    s.findings.push(pass(`call succeeded in ${Date.now() - t0}ms`, `attempts=${attempts} model=${result.model}`))
 
     const u = result.usage
     if (u.source === 'provider_reported') {
-      ok('usage reported by provider', `in=${u.inputTokens} out=${u.outputTokens}` +
-        `${u.cachedInputTokens ? ` cached=${u.cachedInputTokens}` : ''}` +
-        `${u.thinkingTokens ? ` thinking=${u.thinkingTokens}` : ''}`)
+      s.findings.push(
+        pass(
+          'usage reported by provider',
+          `in=${u.inputTokens} out=${u.outputTokens}` +
+            `${u.cachedInputTokens ? ` cached=${u.cachedInputTokens}` : ''}` +
+            `${u.thinkingTokens ? ` thinking=${u.thinkingTokens}` : ''}`,
+        ),
+      )
     } else {
       // Not fatal, but it means every cost on every event becomes NULL.
-      warn(`usage is ${u.source}`, 'worker cost will be recorded as NULL, not estimated')
+      s.findings.push(warn(`usage is ${u.source}`, 'worker cost will be recorded as NULL, not estimated'))
     }
-    console.log(`  ${DIM}--- worker said ---${OFF}`)
-    for (const line of result.text.trim().split('\n').slice(0, 6)) console.log(`  ${DIM}${line}${OFF}`)
+    s.note.push('--- worker said ---', ...result.text.trim().split('\n').slice(0, 6))
   } catch (err) {
-    fail(`call failed: ${err.code ?? 'error'}`, err.message)
-    if (err.detail) console.log(`  ${DIM}${err.detail}${OFF}`)
+    s.findings.push(fail(`call failed: ${err.code ?? 'error'}`, err.message))
+    if (err.detail) s.note.push(err.detail)
   }
-} else {
-  console.log(`\n${DIM}Pass --live to make one real worker call.${OFF}`)
 }
 
-/* ----------------------------------------------------------------- summary */
+/* ------------------------------------------------------------------ render */
+
+const { counts, exitCode } = summarize(sections)
+
+if (wantJson) {
+  const manifest = readJson(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'))
+  console.log(
+    JSON.stringify(
+      toJson({
+        sections,
+        version: ROUTER_VERSION,
+        generatedAt: new Date().toISOString(),
+        mode: { live: wantLive, offline, probeWrites },
+        project: {
+          plugin: { name: manifest?.name ?? 'model-router', version: manifest?.version ?? ROUTER_VERSION },
+          pluginRoot: PLUGIN_ROOT,
+          node: process.versions.node,
+          platform: process.platform,
+          osRelease: os.release(),
+          claudeCodeVersion: null,
+        },
+      }),
+      null,
+      2,
+    ),
+  )
+  process.exit(exitCode)
+}
+
+const PAINT = { pass: C.green, warn: C.yellow, fail: C.red, info: C.dim }
+console.log(`router doctor ${C.dim}${ROUTER_VERSION}${C.off}`)
+for (const s of sections) {
+  console.log(`\n${s.title}\n${'-'.repeat(68)}`)
+  for (const f of s.findings) {
+    const label = f.level.toUpperCase().padEnd(4)
+    console.log(
+      `  ${PAINT[f.level]}${label}${C.off}  ${f.label}${f.detail ? `  ${C.dim}${f.detail}${C.off}` : ''}`,
+    )
+  }
+  if (s.note.length > 0) {
+    console.log('')
+    for (const line of s.note) console.log(`  ${C.dim}${line}${C.off}`)
+  }
+}
+if (!wantLive) console.log(`\n${C.dim}Pass --live to make one real worker call.${C.off}`)
 
 console.log(`\n${'='.repeat(68)}`)
-if (failures > 0) {
-  console.log(`${RED}${failures} failure(s)${OFF}, ${warnings} warning(s) — routing will not work correctly.`)
-  process.exit(1)
+if (counts.fail > 0) {
+  console.log(
+    `${C.red}${counts.fail} failure(s)${C.off}, ${counts.warn} warning(s) — routing will not work correctly.`,
+  )
+} else if (counts.warn > 0) {
+  console.log(
+    `${C.green}No failures${C.off}, ${C.yellow}${counts.warn} warning(s)${C.off} — ` +
+      'a warning means a degraded router, never a blocked session.',
+  )
+} else {
+  console.log(`${C.green}All checks passed.${C.off}`)
 }
-console.log(
-  warnings > 0
-    ? `${GREEN}No failures${OFF}, ${YELLOW}${warnings} warning(s)${OFF}.`
-    : `${GREEN}All checks passed.${OFF}`,
-)
-process.exit(0)
+process.exit(exitCode)

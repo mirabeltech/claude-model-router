@@ -21,12 +21,30 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { parseResponse } from '../lib/contract.mjs'
+import { DASHBOARD_VERSION } from '../lib/version.mjs'
 import { renderReport } from '../lib/render/index.mjs'
 import { NO_ROUTER_MESSAGE, collectFromStore } from './collect.mjs'
 
-const RED = '\x1b[31m'
-const DIM = '\x1b[2m'
-const OFF = '\x1b[0m'
+/**
+ * Colour, which only ever reaches stderr here. Honours `--no-color`, the de-facto `NO_COLOR`
+ * convention and a non-TTY stderr, so a redirected log is plain by default.
+ *
+ * Deliberately NOT imported from `model-router/lib/cli.mjs`, even though that module exists and
+ * does exactly this. A static test pins that nothing in this plugin imports router code, which is
+ * what makes "the dashboard is installable standalone and cannot read a telemetry store"
+ * structural rather than a policy. Twenty duplicated lines is the correct price for that; the
+ * shared CLI contract is enforced across the boundary by `test/cli.contract.test.mjs` instead.
+ */
+const COLOR_CAPABLE = process.stderr.isTTY === true && !process.env.NO_COLOR
+let RED = COLOR_CAPABLE ? '\x1b[31m' : ''
+let DIM = COLOR_CAPABLE ? '\x1b[2m' : ''
+let OFF = COLOR_CAPABLE ? '\x1b[0m' : ''
+
+function disableColor() {
+  RED = ''
+  DIM = ''
+  OFF = ''
+}
 
 /** The house pattern: the hand-rolled flag/opt pair from doctor.mjs, no dependency. */
 function parseArgs(argv) {
@@ -56,6 +74,8 @@ function parseArgs(argv) {
     'mode',
     'project',
     'session',
+    'no-color',
+    'version',
   ]
   const unknown = argv.filter((a) => a.startsWith('--') && !known.includes(a.slice(2)))
   if (unknown.length > 0) return { usage: `unknown option${unknown.length > 1 ? 's' : ''}: ${unknown.join(' ')}` }
@@ -69,6 +89,8 @@ function parseArgs(argv) {
 
   return {
     help: flag('help'),
+    version: flag('version'),
+    noColor: flag('no-color'),
     input: opt('input'),
     out: opt('out'),
     router: opt('router'),
@@ -99,8 +121,14 @@ Passed through to the analytics CLI
 
 Other
   --router <path>      the model-router plugin directory, or its analytics.mjs
+  --no-color           plain diagnostics on stderr (also honours NO_COLOR)
+  --version            print the dashboard version and exit
+  --help               print this and exit
 
-Exit codes: 0 on success, 2 on a bad invocation or an unusable input.
+Exit codes:
+  0  the report was written. Its path is the last line of stdout, alone, so
+     "npm run --silent report" is usable in a command substitution.
+  2  bad invocation, or an input that cannot be used.
 `
 
 /** The UTC date, for the default filename. Same convention as a telemetry segment. */
@@ -132,8 +160,15 @@ export function runReport({
     warn(USAGE)
     return 2
   }
+  if (args.noColor) disableColor()
   if (args.help) {
     log(USAGE.trim())
+    return 0
+  }
+  // Answered BEFORE stdin is read. `report --version` in a pipeline would otherwise block
+  // forever waiting for an analytics response that is never coming.
+  if (args.version) {
+    log(DASHBOARD_VERSION)
     return 0
   }
 
@@ -202,10 +237,24 @@ export function runReport({
   return 0
 }
 
-/** stdin, or null when it is a terminal and therefore not an input. */
+/**
+ * stdin, or null when there is no input on it.
+ *
+ * "Not a TTY" is NOT the same question as "has input", and treating them as equivalent made
+ * `npm run report` hang forever in every non-interactive context — CI, a hook, a scripted clean
+ * install — because stdin was an inherited handle nobody was ever going to write to, so the read
+ * blocked instead of falling through to the spawn. MEASURED: a bare `npm run report` from a
+ * non-interactive shell never returned.
+ *
+ * So ask what the handle actually is. A pipe or a redirected file will reach EOF and is real
+ * input; a TTY or a character device (an inherited console, /dev/null) is not, and must not be
+ * read. The documented precedence is unchanged for every case that genuinely has input.
+ */
 function defaultReadStdin() {
   try {
     if (process.stdin.isTTY) return null
+    const stat = fs.fstatSync(0)
+    if (!stat.isFIFO() && !stat.isFile()) return null
     return fs.readFileSync(0, 'utf8')
   } catch {
     return null

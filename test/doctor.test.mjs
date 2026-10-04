@@ -208,13 +208,48 @@ test('an output request with no safe cap FAILS', () => {
   assert.equal(r.status, 1)
 })
 
-test('the missing-API-key failure is still a FAILURE and is not reclassified', () => {
-  // Phase 8 added a capability section beside this check. It must not have softened it: the
-  // shipped default is Gemini, and a keyless Gemini install genuinely cannot delegate.
-  const r = runDoctor({ CMR_ENABLED: 'true' })
+/*
+ * THE KEY-SEVERITY PAIR. Phase 8 pinned a missing key as an unconditional FAIL, to stop the
+ * capability section softening it. Phase 11 split it, and the two halves below are what keep that
+ * original guarantee intact while fixing what it got wrong.
+ *
+ * What it got wrong: `worker.provider` defaults to gemini and installing requires no key, so the
+ * SHIPPED STATE of every new install reported itself broken and exited 1 — while the gate fails
+ * open on every branch, meaning Claude Code was working perfectly. Exiting 1 on your own defaults
+ * trains everyone to ignore the tool.
+ *
+ * What it got right, and what the second half still pins: if somebody ASKED for gemini, a missing
+ * key is a misconfiguration with a definite fix, and must stay a FAIL.
+ *
+ * The two cases differ in exactly one thing — whether any layer named the provider — which is the
+ * same distinction the codebase already draws between a configured value and a measured one, and
+ * between `null` (no limit) and `0` (a chosen limit). Written as a pair deliberately: either half
+ * alone could be satisfied by a tool that ignored the question.
+ */
+test('an unconfigured install warns about the key it never chose, and does not fail', () => {
+  const r = runDoctor({ CMR_ENABLED: 'true' }) // nobody named a provider; gemini is the default
+  const warns = linesOf(r.out, 'WARN').join(' ')
+  assert.match(warns, /GEMINI_API_KEY is not set/)
+  assert.match(warns, /SHIPPED DEFAULT, not a choice you made/)
+  assert.deepEqual(linesOf(r.out, 'FAIL'), [], 'an install nobody configured is not a broken one')
+  assert.equal(r.status, 0)
+  // And it names both ways forward rather than only the one that costs money.
+  assert.match(r.out, /keyless local worker/)
+})
+
+test('a configured provider with no key is still a FAILURE and is not reclassified', () => {
+  // Identical to the case above apart from somebody naming the provider. That alone turns "not
+  // set up yet" into "asked for gemini, and gemini cannot run".
+  const r = runDoctor({
+    CMR_ENABLED: 'true',
+    CMR_WORKER_PROVIDER: 'gemini',
+    CMR_WORKER_MODEL: 'gemini-2.5-flash',
+  })
   const fails = linesOf(r.out, 'FAIL').join(' ')
   assert.match(fails, /GEMINI_API_KEY is not set/)
   assert.equal(r.status, 1)
+  // The softening guard phase 8 added, kept: the FAIL must not be downgraded to a warning here.
+  assert.equal(/SHIPPED DEFAULT/.test(fails), false)
 })
 
 test('a key is checked against the providers the LANES resolve to, not the global one', () => {
@@ -478,10 +513,12 @@ test('gemini is NOT ready without GEMINI_API_KEY, and says which variable is mis
   assert.match(r.out, /GEMINI_API_KEY is not set/)
   assert.match(r.out, /provider readiness: NOT ready/)
   assert.match(r.out, /GEMINI_API_KEY not set/, 'the reason must name the variable')
-  // Still a FAILURE. Phase 8 added a capability section beside this check and must not have
-  // softened it: a keyless Gemini install genuinely cannot delegate.
-  assert.match(linesOf(r.out, 'FAIL').join(' '), /GEMINI_API_KEY is not set/)
-  assert.equal(r.status, 1)
+  // READINESS is the claim here, and it is independent of severity: the provider is genuinely
+  // not ready either way. Whether that is a WARN or a FAIL depends on whether anyone asked for
+  // gemini, which the key-severity pair above covers. Nobody did here, so the router is merely
+  // not set up: not ready, not broken.
+  assert.match(linesOf(r.out, 'WARN').join(' '), /GEMINI_API_KEY is not set/)
+  assert.equal(r.status, 0)
 })
 
 test('gemini becomes ready once the key it asked for is present', () => {
@@ -493,7 +530,10 @@ test('gemini becomes ready once the key it asked for is present', () => {
 })
 
 test('one absent variable, two providers, opposite verdicts', () => {
-  // The paired property stated directly. Identical environment apart from the provider.
+  // The paired property stated directly. Identical environment apart from the provider — and
+  // BOTH arms name their provider explicitly, so the only variable is which one. Leaving the
+  // gemini arm unconfigured would make this a test about the key-severity split instead, and the
+  // contrast it is trying to draw is about the provider's own requirement.
   const shared = { CMR_ENABLED: 'true' }
   const ollama = runDoctor({
     ...shared,
@@ -502,7 +542,11 @@ test('one absent variable, two providers, opposite verdicts', () => {
     CMR_OLLAMA_CONTEXT_TOKENS: '8192',
     CMR_WORKER_MAX_OUTPUT_TOKENS: '512',
   })
-  const gemini = runDoctor(shared)
+  const gemini = runDoctor({
+    ...shared,
+    CMR_WORKER_PROVIDER: 'gemini',
+    CMR_WORKER_MODEL: 'gemini-2.5-flash',
+  })
 
   assert.match(ollama.out, /provider readiness: ready/)
   assert.match(gemini.out, /provider readiness: NOT ready/)

@@ -18,14 +18,58 @@
  * Severity lives in `scripts/doctor.mjs`. This prints state, not verdicts.
  */
 
+import path from 'node:path'
+
 import { loadConfig } from '../lib/config.mjs'
+import { colors, EXIT, parseFlags } from '../lib/cli.mjs'
+import { ROUTER_VERSION } from '../lib/version.mjs'
 import { hasConfiguredLimit, periodKeys } from '../lib/governance/policy.mjs'
 import { readState } from '../lib/governance/ledger.mjs'
 
-const GREEN = '\x1b[32m'
-const YELLOW = '\x1b[33m'
-const DIM = '\x1b[2m'
-const OFF = '\x1b[0m'
+const USAGE = `Usage: npm run budget [-- <options>]
+
+Show what the governance layer currently allows and what has been spent this UTC
+period. Read-only: it opens no socket and writes nothing, not even the state
+directory.
+
+Options:
+  --no-color   no ANSI escapes (also honours NO_COLOR; pipes are plain already)
+  --version    print the router version and exit
+  --help       print this and exit
+
+Exit codes:
+  0  ran and reported. "No budget configured" is the shipped state and a result,
+     not an error, so there is no failure exit.
+  2  bad invocation.`
+
+const parsed = parseFlags(process.argv.slice(2), {
+  booleans: ['no-color', 'help', 'version'],
+  values: [],
+})
+if (parsed.errors.length > 0) {
+  for (const e of parsed.errors) console.error(e)
+  console.error('\nTry: npm run budget -- --help')
+  process.exit(EXIT.USAGE)
+}
+// Honoured before the config is loaded, so --help cannot be affected by a broken config.
+if (parsed.flags.help) {
+  console.log(USAGE)
+  process.exit(EXIT.OK)
+}
+if (parsed.flags.version) {
+  console.log(ROUTER_VERSION)
+  process.exit(EXIT.OK)
+}
+
+const C = colors({
+  noColor: parsed.flags['no-color'],
+  env: process.env,
+  isTTY: process.stdout.isTTY === true,
+})
+const GREEN = C.green
+const YELLOW = C.yellow
+const DIM = C.dim
+const OFF = C.off
 
 const { config } = loadConfig()
 const budget = config.budget
@@ -45,7 +89,11 @@ if (!hasConfiguredLimit(budget)) {
   // The shipped state, and worth saying in full: "no budget" is not "zero budget".
   console.log(`\n${GREEN}No budget is configured.${OFF}  ${DIM}every limit is null${OFF}`)
   console.log(`${DIM}Delegation is ungoverned, and governance costs no filesystem I/O at all.${OFF}`)
-  console.log(`${DIM}Set one in ${config.projectDir}/.claude/model-router.json, for example:${OFF}`)
+  // path.join, not string concatenation: on Windows this printed a mixed-separator path like
+  // `D:\Dev Projects\x/.claude/model-router.json`, which is not what anyone should be told to
+  // create.
+  const projectConfig = path.join(config.projectDir, '.claude', 'model-router.json')
+  console.log(`${DIM}Set one in ${projectConfig}, for example:${OFF}`)
   console.log(`${DIM}  { "budget": { "run": { "maxTotalTokens": 200000 } } }${OFF}`)
   console.log(`${DIM}A TOKEN budget binds wherever the provider reports usage. A DOLLAR budget${OFF}`)
   console.log(`${DIM}additionally needs pricing.overrides — see npm run doctor.${OFF}\n`)

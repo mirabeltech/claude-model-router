@@ -549,10 +549,47 @@ export function release(config, { id, fs = fsDefault, now = Date.now() } = {}) {
 }
 
 /**
+ * Can the state directory be written, judged WITHOUT writing anything?
+ *
+ * The non-mutating sibling of `probeWritable()`, and what doctor uses by default. Walks up to the
+ * nearest path that exists and asks the filesystem for write permission.
+ *
+ * This exists because `probeWritable()` creates the directory as a side effect, and doctor is now
+ * the first command a new developer runs. A diagnostic that materialises the budget state
+ * directory in order to report on it has changed the thing it was measuring — the same argument
+ * `analytics.mjs` already makes about not creating the telemetry store in order to say it was
+ * empty.
+ *
+ * It is a WEAKER claim than a write, and the caller must say so: `accessSync` does not reliably
+ * reflect ACLs, and on Windows it does not reliably report a read-only directory at all. That is
+ * why `--probe-writes` still exists, and why the finding names which of the two it made.
+ */
+export function checkWritable(config, { fs = fsDefault } = {}) {
+  const paths = ledgerPaths(config)
+  if (paths === null) return { ok: false, reason: 'no_state_dir', probed: false }
+  let at = paths.dir
+  for (let depth = 0; depth < 64; depth++) {
+    if (fs.existsSync(at)) break
+    const up = path.dirname(at)
+    if (up === at) break
+    at = up
+  }
+  try {
+    // fsDefault.constants, not fs.constants: an injected test double need not carry them, and
+    // W_OK is a fixed value rather than a property of the implementation.
+    fs.accessSync(at, fsDefault.constants.W_OK)
+    return { ok: true, reason: null, probed: false, checkedAt: at }
+  } catch (err) {
+    return { ok: false, reason: err?.code ?? 'not_writable', probed: false, checkedAt: at }
+  }
+}
+
+/**
  * Can the state directory actually be written?
  *
- * Used by doctor, never on the hot path. A configured budget with an unwritable state directory
- * cannot be enforced, and that is a FAIL with a definite fix rather than a silent degradation.
+ * Used by doctor behind `--probe-writes`, never on the hot path. A configured budget with an
+ * unwritable state directory cannot be enforced, and that is a FAIL with a definite fix rather
+ * than a silent degradation. This one DOES create the directory, which is why it is opt-in.
  */
 export function probeWritable(config, { fs = fsDefault } = {}) {
   const paths = ledgerPaths(config)

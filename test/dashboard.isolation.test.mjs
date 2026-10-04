@@ -60,6 +60,7 @@ const DASHBOARD_LAYER = Object.freeze({
     'node:fs',
     'node:path',
     '../lib/contract.mjs',
+    '../lib/version.mjs',
     '../lib/render/index.mjs',
     './collect.mjs',
   ]),
