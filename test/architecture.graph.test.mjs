@@ -745,29 +745,53 @@ test('the scanner is a strict superset of the four bodies it replaces', () => {
   assert.deepEqual(missing, [], 'an existing regex found a real edge the shared scanner missed')
 })
 
-test('the number of local import scanners under test/ has not grown', () => {
-  // This does NOT refactor the eight copies that exist. It freezes the count, so that the next
-  // person to need an import scan reaches for test/helpers/imports.mjs instead of pasting a ninth
-  // regex — and so that the two weak bodies stay a known, bounded debt rather than a growing one.
-  //
-  // The count is 8: four copies of one body (governance/analytics/evals/dashboard isolation), two
-  // of another (telemetry.isolation, hook.security), plus routing.capability and evals/gates.mjs.
-  // Both definition forms, because they are both in use: a `function` declaration in six files
-  // and an arrow in routing.capability.test.mjs. A pattern for only one of them reports 7 and
-  // looks like a passing count.
+/**
+ * The local import scanners still in place, each with the reason it has not been swapped.
+ *
+ * This is a DEBT REGISTER, not a ban. It does not refactor anything; it makes the remaining copies
+ * an explicit, bounded list, so the next person needing an import scan reaches for
+ * test/helpers/imports.mjs instead of pasting another regex — and so that a weak body cannot sit
+ * there unlabelled.
+ */
+const REMAINING_LOCAL_SCANNERS = Object.freeze({
+  'test/telemetry.isolation.test.mjs: importsOf':
+    'PENDING, and the one swap with a real behaviour change: this body is the single-line form that ' +
+    'misses 23 of the 199 product edges, so swapping it makes those edges visible to its dispatch ' +
+    'allowlist and its routing-purity test for the first time. It goes in a commit of its own, ' +
+    'after this one, so that a red result is attributable.',
+  'test/hook.security.test.mjs: importsOf':
+    'PENDING, same body as telemetry.isolation and the same 23-edge blind spot. Lower risk in ' +
+    'practice — no multi-line import exists in lib/hook/** or hooks/** today — but it moves with ' +
+    'its twin rather than separately, because one swapped and one not is the worst of both.',
+  'test/routing.capability.test.mjs: importsOf':
+    'LEFT DELIBERATELY. This file mixes specifier checks with raw-source checks, and its /node:/ ' +
+    'scan was the ONLY assertion in the suite that caught a multi-line node:fs import into ' +
+    'routing.mjs before the BUILTINS table above existed. Swapping the specifier half invites ' +
+    'tidying the raw-source half, which is the half that was actually doing the work.',
+  'test/evals/gates.mjs: scanForCapability':
+    'LEFT DELIBERATELY. Its output is a non-advisory gate result, so changing what it scans ' +
+    'changes what a benchmark reports, and CLAUDE.md rule 7 says a benchmark result must not move ' +
+    'by itself. It has no `export ... from` pattern at all, which is a latent hole — context-budget.mjs ' +
+    'is also absent from its DELEGATION_PATH — and the graph above now covers both.',
+})
+
+test('every local import scanner left in test/ is a declared, reasoned exception', () => {
+  // Both definition forms, because both are in use: a `function` declaration in six files and an
+  // arrow in routing.capability.test.mjs. A pattern for only one of them finds 7 of 8 and looks
+  // like a passing count.
   const DEFINITION = /(?:function\s+|const\s+)(importsOf|scanForCapability)\s*(?:\(|=)/g
-  const localScanners = []
+  const found = []
   for (const p of walk(TEST_DIR)) {
     const rel = slash(path.relative(ROOT, p))
     if (rel === 'test/helpers/imports.mjs' || rel === 'test/architecture.graph.test.mjs') continue
-    const src = fs.readFileSync(p, 'utf8')
-    for (const m of src.matchAll(DEFINITION)) {
-      localScanners.push(`${rel}: ${m[1]}`)
-    }
+    for (const m of fs.readFileSync(p, 'utf8').matchAll(DEFINITION)) found.push(`${rel}: ${m[1]}`)
   }
-  assert.equal(
-    localScanners.length,
-    8,
-    `local import scanners: ${localScanners.join(', ')} — use test/helpers/imports.mjs`,
+  assert.deepEqual(
+    found.sort(),
+    Object.keys(REMAINING_LOCAL_SCANNERS).sort(),
+    'use test/helpers/imports.mjs, or add a reasoned entry to REMAINING_LOCAL_SCANNERS',
   )
+  for (const [site, reason] of Object.entries(REMAINING_LOCAL_SCANNERS)) {
+    assert.ok(reason.length > 80, `${site}: a retained copy needs its argument written down`)
+  }
 })

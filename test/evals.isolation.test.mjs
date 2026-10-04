@@ -26,6 +26,8 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 
+import { importsOf } from './helpers/imports.mjs'
+
 import { REPO_ROOT } from './evals/load.mjs'
 
 const EVALS_DIR = path.join(REPO_ROOT, 'test', 'evals')
@@ -43,16 +45,11 @@ function evalFiles(dir = EVALS_DIR, prefix = '') {
 
 const read = (rel) => fs.readFileSync(path.join(EVALS_DIR, rel), 'utf8')
 
-/** Static specifiers plus any dynamic import or require. */
-function importsOf(source) {
-  const specs = []
-  for (const m of source.matchAll(/(?:^|\n)\s*(?:import|export)\s[^'"]*from\s*['"]([^'"]+)['"]/g)) specs.push(m[1])
-  for (const m of source.matchAll(/(?:^|\n)\s*import\s*['"]([^'"]+)['"]/g)) specs.push(m[1])
-  for (const m of source.matchAll(/import\(\s*['"]([^'"]+)['"]\s*\)/g)) specs.push(m[1])
-  for (const m of source.matchAll(/require\(\s*['"]([^'"]+)['"]\s*\)/g)) specs.push(m[1])
-  return specs
-}
-
+/*
+ * Import scanning is shared: see test/helpers/imports.mjs. It is a lexer rather than a regex, and
+ * a measured strict superset of the four local copies that used to exist — this one missed nothing,
+ * so the swap changed no result here.
+ */
 const FILES = evalFiles()
 
 test('the framework holds the files these rules cover', () => {

@@ -22,6 +22,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { importsOf } from './helpers/imports.mjs'
+
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.join(HERE, '..')
 const DASHBOARD = path.join(REPO_ROOT, 'plugins', 'router-dashboard')
@@ -30,16 +32,11 @@ const DASHBOARD = path.join(REPO_ROOT, 'plugins', 'router-dashboard')
 const stripComments = (src) =>
   src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1')
 
-/** Every import specifier, including the dynamic and require forms. */
-function importsOf(source) {
-  const specs = []
-  for (const m of source.matchAll(/(?:^|\n)\s*(?:import|export)\s[^'"]*from\s*['"]([^'"]+)['"]/g)) specs.push(m[1])
-  for (const m of source.matchAll(/(?:^|\n)\s*import\s*['"]([^'"]+)['"]/g)) specs.push(m[1])
-  for (const m of source.matchAll(/import\(\s*['"]([^'"]+)['"]\s*\)/g)) specs.push(m[1])
-  for (const m of source.matchAll(/require\(\s*['"]([^'"]+)['"]\s*\)/g)) specs.push(m[1])
-  return specs
-}
-
+/*
+ * Import scanning is shared: see test/helpers/imports.mjs. It is a lexer rather than a regex, and
+ * a measured strict superset of the four local copies that used to exist — this one missed nothing,
+ * so the swap changed no result here.
+ */
 /**
  * The plugin, file by file, with what each is ALLOWED to import.
  *
