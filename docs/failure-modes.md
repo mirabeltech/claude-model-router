@@ -216,7 +216,26 @@ the right answer, because silently dropping look-alike rows would hide a genuine
 filesystem where append atomicity failed — and the `malformed` report above is the other half of
 that same signal.
 
-## 9. What a safe refusal must never look like
+## 9. Where a secret can travel
+
+Three places, each because scrubbing there would be worse than not. The full matrix — one canary
+against twelve output surfaces — is `test/secrets.leakage.test.mjs`, which asserts the three
+exposures *as* exposures so that none can be silently removed or silently forgotten.
+
+| Surface | Carries a secret? | Why |
+|---|---|---|
+| worker prompt — intent text | no, scrubbed | the developer's own prompt is the one free text that could carry a pasted key |
+| worker prompt — **file content** | **YES** | the deny list is the only control; a scanner would be probabilistic |
+| **worker answer → Claude** | **YES** | redacting would corrupt legitimate answers; it goes only to the caller that was about to read the file |
+| dispatch error message and detail | no, scrubbed | an upstream body can echo a credential |
+| telemetry row, and the JSONL line | no | the answer is counted, not stored; `question_text` is off by default |
+| analytics response | no | the read model selects columns rather than copying rows |
+| rendered HTML report | no | and no local path, no source content, no external resource |
+| doctor output, CLI stdout | no | reported by shape, which is what makes the output pasteable |
+| config warning text | no | **fixed in V1** — one branch used to echo the rejected value |
+| committed files | no | length- and structure-anchored patterns, no allowlist needed |
+
+## 10. What a safe refusal must never look like
 
 The distinction this project most needs to preserve, because it is the one a reader gets wrong.
 

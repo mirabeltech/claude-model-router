@@ -83,11 +83,29 @@ guaranteed, and what is not" states both.
 | Config cannot reach `Object.prototype` | asserted with a `__proto__` payload |
 | No malformed config makes the gate delegate a protected path | 400 seeded mutations × 6 probes |
 
-**One declared exposure, pinned in both directions:** outbound **file content is not redacted**.
-The filename deny list is the only control on what reaches a worker. Intent text *does* cross
-`redactSecrets()`. `test/task.security.test.mjs` asserts both halves, including two tests that
-assert a secret in file content *is* forwarded — so the exposure cannot drift quietly into being
-either fixed or forgotten. Rationale in [post-v1-backlog.md](post-v1-backlog.md) item 5.
+### Three declared exposures
+
+Listed as exposures and asserted as exposures, because a security summary that names only the cases
+that pass is marketing. `test/secrets.leakage.test.mjs` is the matrix — one canary, twelve output
+surfaces, with the three that carry it proved to carry it so none can be quietly "fixed" without a
+test turning red, or quietly forgotten.
+
+1. **Outbound file content is not redacted.** The filename deny list is the only control on what
+   reaches a worker. Intent text *does* cross `redactSecrets()`.
+   `test/task.security.test.mjs` asserts both halves, including two tests that assert a secret in
+   file content *is* forwarded. Scrubbing content would be probabilistic, and a probabilistic
+   control presented as a guarantee is worse than a documented absence. Backlog item 5.
+2. **The worker's answer is not redacted.** A worker asked to summarise a file containing a key may
+   echo it back, and that answer travels in `additionalContext` to Claude — the caller that was
+   about to read the whole file anyway, so nothing is disclosed that was not already being
+   disclosed. Scrubbing it would corrupt legitimate answers: a summary quoting an example value is
+   a correct answer, and a redacted one is a wrong answer the developer cannot tell apart from a
+   right one. **The bound is that the answer is never written to the store** — `returned_answer_chars`
+   is a count — which is asserted rather than assumed, and is what keeps a telemetry directory safe
+   to archive. This exposure was implicit until V1; it is now named and pinned.
+3. **A key in the environment is readable by the provider that needs it.** Unavoidable, and bounded
+   by `apiKeyEnv` naming a *variable* rather than holding a value — so a key cannot be committed in
+   a config file at all — and by no command, row or report printing it.
 
 ## 3. CI status
 
@@ -104,7 +122,7 @@ install reports no dollar figure, and a fresh keyless install is healthy and **w
 
 | Command | Result |
 |---|---|
-| `npm test` | **2366 tests, 2365 pass, 0 fail, 1 skipped** |
+| `npm test` | **2376 tests, 2375 pass, 0 fail, 1 skipped** |
 | `npm run validate` | `--strict` clean on all three manifests |
 | `npm run doctor -- --json --offline` | exit 0 · 20 pass · 5 warn · 0 fail · 25 info |
 | `npm run evals -- --quiet --no-color` | pass |
@@ -227,7 +245,7 @@ neither catches recombination of real tokens into a false claim.
 | Doctor | PASS | `doctor` (32, spawned), `doctor.report` severity matrix | — |
 | CLI | PASS | `cli.contract` over 4 commands × 6 contracts, spawned | — |
 | Documentation | PASS | `docs.contract` (19) incl. link resolution, orphans, command existence, version agreement | — |
-| Security | PASS WITH LIMITATION | §2 | outbound file content not redacted (§5.5) |
+| Security | PASS WITH LIMITATION | §2, `secrets.leakage` (one canary × 12 surfaces) | three declared exposures (§2) |
 | Windows | PASS | full suite locally + `windows.compat` + CI | — |
 | Linux | PASS | CI, Node 24 and 22.5.0 | not hand-walked |
 | macOS | PASS | CI, Node 24 | not hand-walked |
