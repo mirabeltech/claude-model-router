@@ -550,12 +550,20 @@ extracted from `telemetry/aggregate.mjs` so there is exactly one implementation 
 model in the repository, and the batch and streaming paths cannot disagree about what `partial`
 means.
 
-Measured on a 2026 developer laptop, Node 24, from a generated store:
+Measured on a 2026 developer laptop, Node 24, from a generated store. Reproducible:
+`node --test test/analytics.performance.test.mjs`, with `ROUTER_PERF_FULL=1` for the second row.
 
 | rows | store on disk | read | aggregate | serialize | response |
 | --- | --- | --- | --- | --- | --- |
 | 10,000 | 29 MiB | 115 ms | 150 ms | <5 ms | 222 KiB |
 | 100,000 | ~290 MiB | 1,979 ms | 2,650 ms | 3 ms | 450 KiB |
+
+Re-measured at V1 on Node 24.16.0, same hardware, no change to the layer: the 100,000-row case read
+in 2,662 ms and aggregated in 3,095 ms, serialized in 3 ms, and produced the same 450 KiB response.
+About a quarter slower on the two filesystem-bound steps and identical on the two that are not,
+which is the spread a desktop gives across runs rather than a regression. The response size being
+unchanged to the kilobyte is the number worth watching here — it is the one the segment caps exist
+to bound, and the one a dashboard depends on.
 
 **The response does not grow with the store** — 10× the rows for roughly 2× the response — which
 is what the segment caps are for, and what keeps the pipe into the dashboard bounded.
