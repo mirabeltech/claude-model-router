@@ -16,6 +16,8 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 
+import { importsOf } from './helpers/imports.mjs'
+
 import { runReadHook } from '../plugins/model-router/lib/hook/run.mjs'
 import { __resetTelemetryForTests } from '../plugins/model-router/lib/telemetry/index.mjs'
 import { readSegmentsSync } from '../plugins/model-router/lib/telemetry/jsonl.mjs'
@@ -30,10 +32,15 @@ function stripComments(source) {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1')
 }
 
-function importsOf(source) {
-  return [...source.matchAll(/(?:^|\n)\s*(?:import|export)[^\n]*?from\s+'([^']+)'/g)].map((m) => m[1])
-}
-
+/*
+ * Import scanning is shared: see test/helpers/imports.mjs. The local copy this replaced was the
+ * single-line form, which could not match a multi-line `import {
+ ... 
+} from` and therefore
+ * missed 23 of the 199 edges in plugins/** — including dispatch/index.mjs -> ./contract.mjs and
+ * -> ../context-budget.mjs, both of which the allowlist below permits and neither of which it had
+ * ever actually read. Those edges are visible here for the first time.
+ */
 const hookFiles = () => fs.readdirSync(HOOK_DIR).filter((f) => f.endsWith('.mjs'))
 const entryFiles = () => fs.readdirSync(HOOKS_DIR).filter((f) => f.endsWith('.mjs'))
 

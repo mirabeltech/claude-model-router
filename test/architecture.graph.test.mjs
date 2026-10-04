@@ -754,15 +754,6 @@ test('the scanner is a strict superset of the four bodies it replaces', () => {
  * there unlabelled.
  */
 const REMAINING_LOCAL_SCANNERS = Object.freeze({
-  'test/telemetry.isolation.test.mjs: importsOf':
-    'PENDING, and the one swap with a real behaviour change: this body is the single-line form that ' +
-    'misses 23 of the 199 product edges, so swapping it makes those edges visible to its dispatch ' +
-    'allowlist and its routing-purity test for the first time. It goes in a commit of its own, ' +
-    'after this one, so that a red result is attributable.',
-  'test/hook.security.test.mjs: importsOf':
-    'PENDING, same body as telemetry.isolation and the same 23-edge blind spot. Lower risk in ' +
-    'practice — no multi-line import exists in lib/hook/** or hooks/** today — but it moves with ' +
-    'its twin rather than separately, because one swapped and one not is the worst of both.',
   'test/routing.capability.test.mjs: importsOf':
     'LEFT DELIBERATELY. This file mixes specifier checks with raw-source checks, and its /node:/ ' +
     'scan was the ONLY assertion in the suite that caught a multi-line node:fs import into ' +
