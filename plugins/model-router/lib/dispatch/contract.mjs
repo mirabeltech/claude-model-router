@@ -31,8 +31,9 @@ import { redactSecrets } from '../redact.mjs'
  * rule table in docs/worker-dispatch.md.
  *
  * `routing_declined`, NOT `routing_denied`: decide() returns `decision: 'deny'` WHILE delegating
- * — `deny` means "block this tool call and steer to the skill" — so `decision === 'deny' &&
- * delegate === true` is the happy path. A reason spelled `routing_denied` reads backwards.
+ * — `deny` means "block this tool call and return the worker's answer in place of the file" — so
+ * `decision === 'deny' && delegate === true` is the happy path. A reason spelled `routing_denied`
+ * reads backwards.
  */
 export const DISPATCH_REASONS = Object.freeze([
   'completed',

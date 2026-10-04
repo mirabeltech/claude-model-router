@@ -265,11 +265,18 @@ Real token counts and a real quality rate need `--arm ollama`, and those results
 Each of these was verified against the code while building the framework, and each belongs here
 rather than in a commit message.
 
-1. **There is no classifier.** `hook/adapter.mjs` hardcodes `taskType: 'bulk_read'`; the three
-   `skills/` directories are empty; the hook intercepts only `Read`. Four refusal rules are
-   reachable in production, and `task_type_excluded`, `precise_output_requested`, `interactive`,
-   `latency_sensitive`, `over_max_files`, `minLines` and `minEstimatedTokens` are all dead from the
-   hook. The protected-category guarantee is vacuous, and safe because it is vacuous.
+1. **There is no classifier.** `hook/adapter.mjs` hardcodes `taskType: 'bulk_read'` and the hook
+   intercepts only `Read`. Four refusal rules are reachable in production, and
+   `task_type_excluded`, `precise_output_requested`, `interactive`, `latency_sensitive`,
+   `over_max_files`, `minLines` and `minEstimatedTokens` are all dead from the hook.
+
+   **The protected-category guarantee is no longer vacuous, and this passage used to say it was.**
+   When it was written the three `skills/` directories were empty — they have since been removed —
+   and the claim rested on nothing being able to reach a protected task type at all. It now rests
+   on a cross-product eval instead: `test/evals.protected.test.mjs` crosses every corpus input with
+   every non-allowlisted task type and asserts the gate refuses each one. That is a narrower
+   guarantee than "nothing can reach it", and a real one. See `docs/evaluation.md` and CLAUDE.md
+   rule 7.
 2. **The hook sends one file and no question.** Multi-file behaviour and any per-case task are
    measurable only at the dispatch layer, so the corpus cannot claim either through the hook.
 3. **Nothing redacts outbound file content.** The filename deny list is the only control. Pinned as

@@ -48,7 +48,7 @@ export const DESCRIPTIONS = Object.freeze({
   'workers.codeWrite.model': 'Model for the code-writer mode. null inherits worker.model when the provider is also inherited, otherwise providers.<id>.model.',
   'workers.codeWrite.apiKeyEnv': 'API key variable for the code-writer mode. null inherits worker.apiKeyEnv only when the provider is also inherited.',
   'workers.codeWrite.timeoutMs': 'Timeout for the code-writer mode. null inherits worker.timeoutMs; a millisecond budget carries no provider identity, so it always inherits.',
-  'routing.bulkRead.enforce': 'deny blocks the read and steers to the skill; ask prompts; suggest only advises; off disables the gate.',
+  'routing.bulkRead.enforce': 'deny blocks the read and returns the worker answer in its place; ask prompts; suggest only advises; off disables the gate.',
   'routing.bulkRead.minLines': 'Line count above which a full-file read is gated.',
   'routing.bulkRead.minBytes': 'Byte size gate, checked before line counting so the hook stays fast.',
   'routing.bulkRead.minEstimatedTokens': "Third size proxy, OR'd with minLines and minBytes. null disables it; it never satisfies while unset.",

@@ -42,6 +42,7 @@ New here? [getting-started.md](getting-started.md), then come back.
 | [architecture.md](architecture.md) | **Start here for the shape.** Four decisions, the purity map, and the test that pins each claim. |
 | [hook-integration.md](hook-integration.md) | The `PreToolUse` adapter, and verifying an installation. |
 | [claude-code-hook-contract.md](claude-code-hook-contract.md) | The host's behaviour as verified, including two silent traps. |
+| [failure-modes.md](failure-modes.md) | What happens when each part breaks, and why fail-open, fail-closed and safe refusal are not interchangeable. |
 
 ## Extending it
 
@@ -59,6 +60,14 @@ evidence and never changes policy by itself.
 | [evaluation.md](evaluation.md) | The eval framework, the corpus, and what it may not do. |
 | [benchmark-methodology.md](benchmark-methodology.md) | What the benchmark's numbers are worth. |
 | [phase-8-findings.md](phase-8-findings.md) | A dated lab notebook: what was measured, and what it changed. |
+| [phase-12-hardening.md](phase-12-hardening.md) | The final hardening pass: what broke, what it corrected, and what is still unmeasured. |
+
+## Releasing it
+
+| Document | Answers |
+| --- | --- |
+| [release-v1.md](release-v1.md) | **What V1 is.** The acceptance matrix, the known limitations, and the release decision. |
+| [post-v1-backlog.md](post-v1-backlog.md) | What is deliberately not built yet, ranked, with the reason each item sits where it does. |
 
 ## Elsewhere in the repo
 

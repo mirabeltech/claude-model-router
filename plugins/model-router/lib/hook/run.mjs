@@ -186,9 +186,9 @@ export async function runReadHook({
 
     if (decision.delegate !== true) return record('not_delegated')
 
-    // Only `deny` is acted on. `suggest` means "delegate-worthy, but do not block", and steering
-    // Claude to a skill is Phase 6; `ask` would prompt the developer to approve a read rather
-    // than delegate it. Both are recorded and both let the Read through.
+    // Only `deny` is acted on. `suggest` means "delegate-worthy, but do not block", and no
+    // delegation-steering skill ships, so nothing acts on it; `ask` would prompt the developer to
+    // approve a read rather than delegate it. Both are recorded and both let the Read through.
     if (decision.decision !== 'deny') return record('not_enforced')
 
     /* ---- governance. AFTER the gate has ruled, BEFORE anything is spent. ----

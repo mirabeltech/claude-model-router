@@ -3,7 +3,7 @@
 `lib/dispatch/` answers one question: given a decision the routing engine already approved, what
 did the worker actually say? It joins three layers and owns none of their jobs. It does not
 decide, does not retry, does not price anything, and does not write a telemetry row. It registers
-no hook and ships no skill — **nothing in Claude Code calls it yet.**
+no hook of its own: **`lib/hook/run.mjs` is its one caller**, on the `PreToolUse` path.
 
 > **Failing to delegate is failing open.** The dispatcher's safe failure is to make no provider
 > call, because the caller then does the work itself. That is CLAUDE.md's second non-negotiable
@@ -341,10 +341,11 @@ inheriting a provider also inherits its model, faithfully. The per-lane asymmetr
 the lane case, not the global one. `npm run doctor` prints the resolved pair for both modes, which
 is where that mismatch becomes visible.
 
-**`dispatch()` now has exactly one caller.** `lib/hook/run.mjs` invokes it for a delegated `Read`,
+**`dispatch()` has exactly one caller.** `lib/hook/run.mjs` invokes it for a delegated `Read`,
 under the hook's own deadline rather than `worker.timeoutMs` — see
-[hook-integration.md](hook-integration.md). There are still no skills, so nothing invokes the
-`code-writer` mode and the `codeWrite` lane remains advisory and unreachable.
+[hook-integration.md](hook-integration.md). No delegation-steering skill ships, so nothing invokes
+the `code-writer` mode and the `codeWrite` lane remains advisory and unreachable. The one shipped
+skill, `router-dashboard`'s `router-report`, reads analytics and dispatches nothing.
 
 ## The reachable timeout ceiling
 

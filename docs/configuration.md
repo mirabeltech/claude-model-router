@@ -197,7 +197,7 @@ What the gate considers delegation-worthy. Changing a threshold requires a negat
 | Setting | Type | Default | Range | Env var | Meaning |
 | --- | --- | --- | --- | --- | --- |
 | `routing.bulkRead.enabled` | bool | `true` | — | `CMR_BULK_READ_ENABLED` | Whether the bulk-read gate is consulted at all. Disabling it is narrower than disabling routing entirely. |
-| `routing.bulkRead.enforce` | enum | `"deny"` | `deny`, `ask`, `suggest`, `off` | `CMR_BULK_READ_ENFORCE` | deny blocks the read and steers to the skill; ask prompts; suggest only advises; off disables the gate. |
+| `routing.bulkRead.enforce` | enum | `"deny"` | `deny`, `ask`, `suggest`, `off` | `CMR_BULK_READ_ENFORCE` | deny blocks the read and returns the worker answer in its place; ask prompts; suggest only advises; off disables the gate. |
 | `routing.bulkRead.minLines` | int | `350` | min 1, max 1000000 | `CMR_MIN_LINES` | Line count above which a full-file read is gated. |
 | `routing.bulkRead.minBytes` | int | `12000` | min 1, max 100000000 | `CMR_MIN_BYTES` | Byte size gate, checked before line counting so the hook stays fast. |
 | `routing.bulkRead.minEstimatedTokens` | int | `null` | min 1, max 100000000, nullable | `CMR_MIN_ESTIMATED_TOKENS` | Third size proxy, OR'd with minLines and minBytes. null disables it; it never satisfies while unset. |

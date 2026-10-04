@@ -137,10 +137,10 @@ that raising a threshold can only narrow delegation.
 
 ## Known discrepancies
 
-The README advertises the bulk-reader skill's trigger as "questions across 3+ files", while the
-gate's `minFiles` default is `1`. These are two different layers — the skill's documented trigger
-is advice to the model, the gate's floor is a hook threshold — and a single large file is worth
-delegating. Set `routing.bulkRead.minFiles: 3` if you want the gate to match the prose.
+**`minFiles` defaults to `1`, which is not the "3+ files" an earlier draft of this document
+described.** No delegation-steering skill ships, so there is no second layer advertising a
+different trigger — there is only the gate's floor, and a single large file is worth delegating on
+its own. Set `routing.bulkRead.minFiles: 3` if you want more than one file required.
 
 **`minLines` is unreachable from the hook.** Counting lines needs the file's bytes, and reading a
 file to decide whether reading it is worth avoiding defeats the purpose, so the hook leaves

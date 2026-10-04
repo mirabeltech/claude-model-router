@@ -10,12 +10,17 @@ endorsed by, or derived from the code of Spotify or Anthropic.** What this proje
 abstraction, a context-capability model, a telemetry and cost model, a budget layer, an analytics
 engine, a reporting dashboard, and fail-open behaviour throughout.
 
-> **Status: phases 0–10 are done** — layered configuration, provider abstraction, telemetry write
-> path, routing engine, worker dispatch, the Claude Code hook, context budgeting, budget governance,
-> and the analytics engine with its HTML report. A large `Read` is intercepted, delegated, measured
-> and accounted for. Still unscheduled: ingest/SQLite materialisation, delegation-steering skills,
-> and behavioural evals. Note that **every budget limit and every bundled price ships `null`**, so a
-> default install enforces nothing and reports no dollar figure.
+> **Status: V1. Phases 0–12 are done** — layered configuration, provider abstraction, telemetry
+> write path, routing engine, worker dispatch, the Claude Code hook, context budgeting, budget
+> governance, the analytics engine with its HTML report, packaging, and a final hardening pass. A
+> large `Read` is intercepted, delegated, measured and accounted for. Still unscheduled:
+> ingest/SQLite materialisation, delegation-steering skills, and behavioural evals — see
+> [docs/post-v1-backlog.md](docs/post-v1-backlog.md). Note that **every budget limit and every
+> bundled price ships `null`**, so a default install enforces nothing and reports no dollar figure.
+>
+> **Worker delegation is policy/routing infrastructure; worker quality remains task- and
+> model-dependent.** Nothing here measures whether a worker's answer is as good as Claude's — see
+> [docs/release-v1.md](docs/release-v1.md) for what was and was not established.
 
 **Two things to know before anything else.** The routing gate **fails open on every branch** — no
 worker, no key, spent budget, unreachable daemon, malformed config all let the read through exactly
@@ -234,7 +239,7 @@ Generated files are gated in CI — change `SPEC` and you must run `npm run gen:
 | 9 | Budget governance, quotas and safety controls | **done** |
 | 10 | Analytics, savings dashboard and router observability | **done** |
 | 11 | Packaging, distribution and developer experience | **done** |
-| 12 | Hardening and release | |
+| 12 | Hardening, end-to-end validation and the V1 release | **done** |
 
 Unscheduled, and tracked here so they are not mistaken for done: ingest and SQLite
 materialisation, delegation-steering skills (so `routing.codeWrite.enforce` is advisory and

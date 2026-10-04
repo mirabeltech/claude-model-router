@@ -129,7 +129,7 @@ what it saved. Two plugins: `model-router` (writer) and `router-dashboard` (read
   source scan in both directions.
 - `docs/` — [`docs/README.md`](docs/README.md) is the index. `configuration.md`'s table and all of
   `environment.md` are GENERATED; never hand-edit below the sentinel.
-- `test/` — `node --test`. `test/behavioural/` holds cases but no runner yet.
+- `test/` — `node --test`.
 - `test/evals/` — the evaluation framework, and `test/fixtures/evals/` its corpus. It measures the
   router and never changes it: it calls `buildEvent()` but never `emitEvent()`, never reads the user's
   config, and exports no notion of a better threshold. `evals.isolation.test.mjs` enforces all three

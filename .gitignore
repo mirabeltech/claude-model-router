@@ -6,6 +6,14 @@ node_modules/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
-test/behavioural/sandbox/
 test/.tmp/
 router-report-*.html
+
+# scratch files the CI reproducibility steps write when run by hand
+/a.json
+/b.json
+/a.html
+/b.html
+/empty.json
+/empty.html
+/doctor.json

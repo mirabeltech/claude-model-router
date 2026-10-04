@@ -246,7 +246,7 @@
                 "off"
               ],
               "default": "deny",
-              "description": "deny blocks the read and steers to the skill; ask prompts; suggest only advises; off disables the gate. Env override: CMR_BULK_READ_ENFORCE."
+              "description": "deny blocks the read and returns the worker answer in its place; ask prompts; suggest only advises; off disables the gate. Env override: CMR_BULK_READ_ENFORCE."
             },
             "minLines": {
               "type": "integer",

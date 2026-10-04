@@ -159,9 +159,11 @@ claude plugin marketplace update claude-model-router
 claude plugin update model-router@claude-model-router
 ```
 
-Restart Claude Code to apply. Releases are tagged `model-router--v<version>`; the version is a
-single number shared by both plugins and stamped on every telemetry row, so a report always says
-which build produced it.
+Restart Claude Code to apply. Releases are tagged `v<version>` — the form
+`.github/workflows/release.yml` triggers on, and strips to check against the manifests. (This read
+`model-router--v<version>` until phase 12, which no workflow would ever have matched.) The version
+is a single number shared by both plugins and stamped on every telemetry row, so a report always
+says which build produced it.
 
 Telemetry rows carry their own `schema_version`, and a reader accepts a row written by any router
 version — so upgrading never invalidates the store you already have.

@@ -61,7 +61,13 @@ export const DELEGATABLE_TASK_TYPES = Object.freeze(['bulk_read', 'code_write'])
 /** Which config block rules a task type. Keys must equal DELEGATABLE_TASK_TYPES. */
 export const TASK_TYPE_LANE = Object.freeze({ bulk_read: 'bulkRead', code_write: 'codeWrite' })
 
-/** The worker mode a delegated lane names. Values must equal the shipped skill names. */
+/**
+ * The worker mode a delegated lane names.
+ *
+ * These were intended to equal the names of shipped delegation skills. No such skill ships, so
+ * today they are the mode identifiers `dispatch/modes.mjs` resolves a prompt from, and nothing
+ * outside this repository depends on the spelling.
+ */
 export const LANE_MODE = Object.freeze({ bulkRead: 'bulk-reader', codeWrite: 'code-writer' })
 
 /**
