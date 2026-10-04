@@ -26,8 +26,12 @@ export const SCHEMA_VERSION = 1
 /** Bumped on any change to a formula or a null rule in calc.mjs. Stamped on every event. */
 export const CALC_VERSION = 1
 
-/** Must equal plugins/model-router/.claude-plugin/plugin.json `version`. Asserted by a test. */
-export const ROUTER_VERSION = '0.1.0'
+/**
+ * The release version, generated from package.json by scripts/sync-version.mjs and re-exported
+ * here so every existing import of ROUTER_VERSION keeps working. A zero-import module rather than
+ * a manifest read, because this file is on the PreToolUse hot path.
+ */
+export { ROUTER_VERSION } from '../version.mjs'
 
 /** Only USD in v1. A table in any other currency is rejected at load rather than converted. */
 export const CURRENCY = 'USD'

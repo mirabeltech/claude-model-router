@@ -51,9 +51,10 @@ const DASHBOARD_LAYER = Object.freeze({
   'lib/contract.mjs': Object.freeze([]),
   'lib/format.mjs': Object.freeze([]),
   'lib/html.mjs': Object.freeze([]),
+  'lib/version.mjs': Object.freeze([]),
   'lib/render/chart.mjs': Object.freeze(['../html.mjs', '../format.mjs']),
   'lib/render/sections.mjs': Object.freeze(['../html.mjs', '../format.mjs', './chart.mjs']),
-  'lib/render/index.mjs': Object.freeze(['../html.mjs', './sections.mjs']),
+  'lib/render/index.mjs': Object.freeze(['../html.mjs', './sections.mjs', '../version.mjs']),
   'scripts/collect.mjs': Object.freeze(['node:child_process', 'node:fs', 'node:path', 'node:url']),
   'scripts/report.mjs': Object.freeze([
     'node:fs',

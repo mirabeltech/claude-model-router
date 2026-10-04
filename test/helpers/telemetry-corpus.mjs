@@ -17,6 +17,7 @@
  * throughput test against rows the reader would never actually see.
  */
 
+import { FIXTURE_ROUTER_VERSION } from './versions.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -77,7 +78,7 @@ function buildRow({ i, r, priced, dayMs }) {
     event_id: `perf-${String(i).padStart(7, '0')}`,
     timestamp: new Date(dayMs).toISOString(),
     tz_offset_minutes: 0,
-    router_version: '0.1.0',
+    router_version: FIXTURE_ROUTER_VERSION,
     calc_version: 1,
     pricing_version: priced ? '2026-02-01' : null,
     pricing_source: priced ? 'file' : 'none',

@@ -11,6 +11,7 @@
  * dispatched row is the only kind that carries usage.
  */
 
+import { FIXTURE_ROUTER_VERSION } from './versions.mjs'
 import { projectRecord } from '../../plugins/model-router/lib/telemetry/record.mjs'
 
 /** 2026-03-04T12:00:00.000Z, matching telemetry-dir.mjs so fixtures and builders agree. */
@@ -30,7 +31,7 @@ function identity(over) {
     task_id: `toolu_${String(seq).padStart(6, '0')}`,
     timestamp: over.timestamp ?? new Date(NOW - 60_000).toISOString(),
     tz_offset_minutes: 0,
-    router_version: '0.1.0',
+    router_version: FIXTURE_ROUTER_VERSION,
     calc_version: 1,
     currency: 'USD',
     privacy_level: 'hashed',

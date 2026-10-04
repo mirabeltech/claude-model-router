@@ -18,7 +18,14 @@ import { SECTION_RENDERERS, footerSection, headerSection } from './sections.mjs'
 /** Analytics contract versions this renderer understands. */
 export const DASHBOARD_CONTRACT_VERSIONS = Object.freeze([1])
 
-export const DASHBOARD_VERSION = '0.1.0'
+/**
+ * Generated from package.json by scripts/sync-version.mjs and re-exported, so `renderReport`'s
+ * default parameter and every existing import keep working. It has to be a generated module: no
+ * file under this plugin's `lib/` may import a node builtin, so the renderer cannot read its own
+ * manifest.
+ */
+export { DASHBOARD_VERSION } from '../version.mjs'
+import { DASHBOARD_VERSION } from '../version.mjs'
 
 /**
  * Render a validated analytics response.

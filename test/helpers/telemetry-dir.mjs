@@ -11,6 +11,7 @@
  * day and is almost impossible to reproduce.
  */
 
+import { FIXTURE_ROUTER_VERSION } from './versions.mjs'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -189,7 +190,7 @@ export function buildProbeRecord({ writerIndex, seq, padLen, nonce }) {
     event_id: `${taskId}-${nonce}`,
     timestamp: new Date(FROZEN_MS).toISOString(),
     tz_offset_minutes: 0,
-    router_version: '0.1.0',
+    router_version: FIXTURE_ROUTER_VERSION,
     calc_version: 1,
     pricing_version: null,
     pricing_source: 'none',

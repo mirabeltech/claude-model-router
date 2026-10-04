@@ -20,7 +20,16 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { FIELD_ORDER } from '../plugins/model-router/lib/telemetry/record.mjs'
+import { readFileSync } from 'node:fs'
+
+import { FIELD_ORDER, ROUTER_VERSION } from '../plugins/model-router/lib/telemetry/record.mjs'
+
+/**
+ * Deliberately not the release version. A provenance fixture that supplied the real version could
+ * only ever assert its own input back, which is how the pass-through test below used to be
+ * vacuous.
+ */
+const FAKE_ROUTER_VERSION = '9.9.9-test'
 import {
   EVAL_EVENT_ID_PREFIX,
   EVAL_NOW,
@@ -174,7 +183,7 @@ const provenanceFor = (arm) =>
     pricingSource: 'bundled',
     runSeed: 'phase-6',
     startedAt: '2026-10-03T00:00:00.000Z',
-    versions: { policyVersion: 1, promptVersion: 1, schemaVersion: 1, calcVersion: 1, configVersion: 1, routerVersion: '0.1.0' },
+    versions: { policyVersion: 1, promptVersion: 1, schemaVersion: 1, calcVersion: 1, configVersion: 1, routerVersion: FAKE_ROUTER_VERSION },
   })
 
 test('provenance records everything needed to say what produced a number', () => {
@@ -203,11 +212,35 @@ test('modelDependent is derived from the arm, so a live run cannot be filed as r
   assert.equal(live.modelDependent, true, 'a real model makes every number in the run model-dependent')
 })
 
-test('the version stamps come from the engine, not from a literal typed here', () => {
+test('buildProvenance passes a version stamp through rather than inventing one', () => {
+  // This fixture supplies FAKE_ROUTER_VERSION, which is deliberately NOT the release version, so
+  // the assertion proves pass-through. It used to pass in '0.1.0' and then assert '0.1.0' — the
+  // input against itself, under a title claiming the stamp came from the engine.
   const p = provenanceFor(EVAL_ARMS.mock)
-  assert.equal(p.routerVersion, '0.1.0')
+  assert.equal(p.routerVersion, FAKE_ROUTER_VERSION)
+  assert.notEqual(p.routerVersion, ROUTER_VERSION, 'the fixture must not accidentally equal the real version')
   assert.equal(typeof p.calcVersion, 'number')
   assert.equal(typeof p.policyVersion, 'number')
+})
+
+test('the harness stamps the engine version, not a literal of its own', () => {
+  // The claim the test above cannot make, made where it is actually true: the one real call site
+  // reads ROUTER_VERSION from the engine, so the release version reaches a benchmark row without
+  // anybody retyping it.
+  const source = readFileSync(new URL('./evals/bin/run.mjs', import.meta.url), 'utf8')
+  assert.match(source, /routerVersion:\s*ROUTER_VERSION/, 'run.mjs must stamp the engine constant')
+  // Plain substring checks rather than one clever regex: the claim is about two specific lines of
+  // source, and a brittle pattern here would fail for reasons that have nothing to do with it.
+  assert.ok(
+    source.includes("ROUTER_VERSION") &&
+      source.includes("from '../../../plugins/model-router/lib/telemetry/record.mjs'"),
+    'run.mjs must import the version from the engine rather than redeclaring it',
+  )
+  assert.ok(
+    !/^\s*(?:export\s+)?const ROUTER_VERSION\s*=/m.test(source),
+    'run.mjs must not declare a ROUTER_VERSION of its own',
+  )
+  assert.match(ROUTER_VERSION, /^\d+\.\d+\.\d+$/)
 })
 
 /* ------------------------------------------------------------------ latency */

@@ -33,6 +33,7 @@ import {
   SEGMENT_DIMENSIONS,
   UNITS,
 } from '../plugins/model-router/lib/analytics/schema.mjs'
+import { dispatchedRow } from './helpers/analytics-rows.mjs'
 import { findAggNodes, findForbiddenFields, stringifyResponse } from '../plugins/model-router/lib/analytics/serialize.mjs'
 import { formatAgg, NULL_KEY } from '../plugins/model-router/lib/telemetry/aggregate.mjs'
 import { FIELD_ORDER, ROUTING_REASONS } from '../plugins/model-router/lib/telemetry/record.mjs'
@@ -68,6 +69,24 @@ test('the engine stamps the versions it understands, so a stale reader is detect
   // The dashboard groups by the same sentinel, so it has to be told what it is rather than
   // hard-coding a string that could drift.
   assert.equal(RESPONSE.engine.nullKey, NULL_KEY)
+})
+
+test('a row written by a different router version is still read and aggregated', () => {
+  // The committed telemetry fixtures carry a frozen `router_version`, and
+  // test/helpers/versions.mjs keeps the synthetic rows pinned to it deliberately: a row's version
+  // is data about the past, not a statement about this build. That only holds because the read
+  // model does not filter on it. Nothing asserted that, so the fixtures depended on an untested
+  // property — and the next release bump would have been the thing that discovered it.
+  const rows = [
+    dispatchedRow({ router_version: '0.0.1' }),
+    dispatchedRow({ router_version: '99.0.0' }),
+  ]
+  const res = analyzeRows(rows, { now: NOW, window: { kind: 'all' } })
+  assert.equal(res.summary.events.value, 2, 'both rows must be read regardless of their version')
+  assert.equal(res.summary.delegations.value, 2)
+  // And neither row was quietly discarded or flagged on the way through.
+  assert.equal(res.dataQuality.rows.shedRecords, 0)
+  assert.equal(res.dataQuality.rows.validationWarnings, 0)
 })
 
 test('the request echoes what was asked AND what was actually filtered on', () => {
