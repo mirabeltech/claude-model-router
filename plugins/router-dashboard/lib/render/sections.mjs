@@ -845,7 +845,7 @@ export function footerSection(response, { dashboardVersion }) {
     `telemetry schema <code>${escapeHtml(String(e.buildSchemaVersion))}</code> · `,
     `calc <code>${escapeHtml(String(e.buildCalcVersion))}</code>`,
     '<br>',
-    'This report reads a telemetry store and renders it. It computes no cost, prices no model and changes no configuration.',
+    'This report renders an analytics response it was handed. It reads no telemetry store, computes no cost, prices no model and changes no configuration.',
     '</footer>',
   ].join('')
 }

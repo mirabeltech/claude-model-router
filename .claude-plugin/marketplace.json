@@ -13,7 +13,7 @@
     {
       "name": "model-router",
       "source": "./plugins/model-router",
-      "description": "Keeps Claude as the primary reasoning agent while shunting bulk file reading and predictable boilerplate generation to a cheap worker model. Hooks gate large reads, skills steer delegation, and every delegation is measured.",
+      "description": "Keeps Claude as the primary reasoning agent while shunting bulk file reading to a cheap worker model. A PreToolUse hook gates large reads, the gate fails open so a broken worker degrades to plain Claude Code, and every delegation is measured. Slash commands expose the diagnostic and the report.",
       "version": "0.1.0",
       "author": { "name": "Mirabel Technologies" },
       "category": "developer-tools",
@@ -22,7 +22,7 @@
     {
       "name": "router-dashboard",
       "source": "./plugins/router-dashboard",
-      "description": "Reads the model-router telemetry store and renders a self-contained HTML report: delegated tasks, tokens, worker cost, estimated savings, latency and routing quality.",
+      "description": "Renders a model-router analytics response as a self-contained HTML report: delegation rate, worker usage, tokens avoided, estimated savings and their measurement coverage, latency, governance decisions and data quality. Read-only, and it never recomputes cost.",
       "version": "0.1.0",
       "author": { "name": "Mirabel Technologies" },
       "category": "developer-tools",
