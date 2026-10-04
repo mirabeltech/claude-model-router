@@ -159,6 +159,7 @@ Supplied by the platform. Listed because the test harness sets them explicitly t
 | `HOME` | no | no | — | config | The home directory, which is where the per-developer config and the default telemetry and governance directories live. |
 | `USERPROFILE` | no | no | — | config | The Windows home directory. The counterpart to HOME. |
 | `PATH` | yes, for any spawned child | no | — | test harness | Passed through to spawned child processes so the Node executable can be found. |
+| `SYSTEMROOT` | yes on Windows, for any spawned child | no | — | test harness | The all-caps spelling of SystemRoot. Windows environment variables are case-insensitive, so a process may receive either; the clean-install fixture forwards whichever it was given rather than guessing. |
 | `SystemRoot` | yes on Windows, for any spawned child | no | — | test harness | Required for a Node child process to start on Windows, so it is forwarded explicitly. |
 | `TEMP` | no | no | `os.tmpdir()` | evals | Scratch directory for corpus generation. |
 

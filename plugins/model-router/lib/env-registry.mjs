@@ -189,6 +189,18 @@ export const ENV_REGISTRY = Object.freeze({
     ],
   }),
 
+  SYSTEMROOT: Object.freeze({
+    purpose:
+      'The all-caps spelling of SystemRoot. Windows environment variables are case-insensitive, so a process may receive either; the clean-install fixture forwards whichever it was given rather than guessing.',
+    class: 'os',
+    required: 'yes on Windows, for any spawned child',
+    secret: false,
+    default: null,
+    precedence: 'inherited',
+    subsystem: 'test harness',
+    readers: ['test/helpers/clean-install.mjs'],
+  }),
+
   SystemRoot: Object.freeze({
     purpose: 'Required for a Node child process to start on Windows, so it is forwarded explicitly.',
     class: 'os',
@@ -202,6 +214,7 @@ export const ENV_REGISTRY = Object.freeze({
       'test/dashboard.cli.test.mjs',
       'test/doctor.test.mjs',
       'test/helpers/hook-payload.mjs',
+      'test/helpers/clean-install.mjs',
     ],
     note:
       'The reason the test helpers CONSTRUCT a child environment rather than spreading process.env: a constructed environment proves the child inherited nothing from the developer, but it has to carry the handful of variables without which Node will not launch.',

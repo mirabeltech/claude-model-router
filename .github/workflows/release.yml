@@ -1,0 +1,49 @@
+name: release
+
+# A Claude Code marketplace is consumed straight from the repository, so there is nothing to
+# publish. "Release" here means exactly three things: a tag exists, the versions agree with it, and
+# the tree at that tag is green. That is worth automating now because the whole point of the
+# versioning work is that the seven version fields and the tag cannot drift apart.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to verify, e.g. v0.1.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Unit and integration tests
+        run: npm test
+
+      - name: Manifests validate
+        run: |
+          npm i -g @anthropic-ai/claude-code
+          npm run validate
+
+      - name: The tag matches the release version
+        # This is why sync-version.mjs grew --check and --expect rather than gaining a second
+        # script: a release gains no new code, only a new argument.
+        run: |
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          node scripts/sync-version.mjs --check --expect "${tag#v}"
+
+      - name: Create the GitHub release
+        if: github.event_name == 'push'
+        # `gh` is preinstalled on the runner. A third-party action would be a supply-chain
+        # dependency, and the zero-dependency posture extends past package.json.
+        run: gh release create "${{ github.ref_name }}" --generate-notes --verify-tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

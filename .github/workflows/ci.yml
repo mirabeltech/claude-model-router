@@ -4,25 +4,50 @@ on:
   push:
     branches: [main]
   pull_request:
+  # A run can always be forced. `pull_request` has no branch filter, so PRs from any branch are
+  # covered; this is the safety net for a direct push to a branch that is not `main`.
+  workflow_dispatch:
 
 jobs:
   test:
     # The write path makes platform-specific claims about append atomicity and
     # path normalization, so both platforms are gating, not informational.
+    # An explicit include, not a cross product: the two axes make different claims. Three
+    # platforms answer "does the write path behave the same everywhere", and the fourth leg answers
+    # "is the Node floor package.json declares actually usable". A 3x2 product would pay for six
+    # legs to learn those two things.
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        include:
+          - { os: ubuntu-latest, node: '24' }
+          - { os: windows-latest, node: '24' }
+          # macOS was never tested while the README claimed behaviour was identical on it.
+          - { os: macos-latest, node: '24' }
+          # The declared engines floor, pinned EXACTLY. '22' would test whatever 22.x shipped this
+          # week, which is not the claim package.json makes.
+          - { os: ubuntu-latest, node: '22.5.0' }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: ${{ matrix.node }}
       - name: Unit and integration tests
         run: npm test
+      # Four generated files, one gate each. Generating and then diffing is the only way a
+      # document stays true to the table it was derived from: a reference that drifts is worse
+      # than none, because a reader cannot tell which part drifted.
       - name: Config schema is not stale
         run: node plugins/model-router/scripts/gen-config-schema.mjs && git diff --exit-code
+      - name: The settings reference is not stale
+        run: npm run docs:config && git diff --exit-code
+      - name: The environment inventory is not stale
+        run: npm run docs:env && git diff --exit-code
+      - name: Versions are in sync
+        # Run on every leg, Windows included, deliberately: it is how we prove the manifest splice
+        # preserved line endings and did not reformat hand-written JSON.
+        run: npm run sync:version && git diff --exit-code
 
       # The deterministic arm is offline and keyless — the mock provider behind an injected
       # fetchImpl, no socket and no API key — so it gates like any other test. It exits non-zero if
@@ -35,7 +60,9 @@ jobs:
       # that a rerun reproduces, and the cross-platform half is covered by the projection omitting
       # the machine-local tz_offset_minutes.
       - name: Benchmark is reproducible
-        if: matrix.os == 'ubuntu-latest'
+        # Pinned to ONE leg. There are now two ubuntu legs, so `matrix.os` alone would run this
+        # twice and diff the same artifacts for no extra information.
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '24'
         run: |
           npm run evals -- --quiet --no-color --json /tmp/evals-a
           npm run evals -- --quiet --no-color --json /tmp/evals-b
@@ -68,6 +95,30 @@ jobs:
           npm run --silent report -- --input empty.json --now 2026-03-04T12:00:00.000Z --out empty.html
           if grep -qE '\$[0-9]' empty.html; then echo 'a price was invented'; exit 1; fi
           rm -f empty.json empty.html
+
+      # THE STATE OF A BRAND-NEW INSTALL, in the two respects that were actually wrong before.
+      #
+      # Doctor used to exit 1 on its own shipped defaults, because `worker.provider` is gemini and
+      # installing needs no key — so a working Claude Code install reported itself broken. And it
+      # used to mkdir the telemetry and governance directories in order to probe them, which means
+      # the first command a new developer ran left state behind and then said "store is empty",
+      # having falsified what it just measured.
+      #
+      # A scratch HOME with no key, and an empty tree afterwards, is what keeps both fixed.
+      - name: A fresh keyless install is healthy and writes nothing
+        shell: bash
+        run: |
+          scratch="$(mktemp -d)"
+          HOME="$scratch" USERPROFILE="$scratch"             CMR_TELEMETRY_DIR="$scratch/store" CMR_BUDGET_STATE_DIR="$scratch/gov"             node plugins/model-router/scripts/doctor.mjs --json --offline --no-color > doctor.json
+          node -e '
+            const r = JSON.parse(require("fs").readFileSync("doctor.json", "utf8"));
+            if (r.exitCode !== 0) { console.error("a clean install reported exitCode", r.exitCode); process.exit(1) }
+            if (r.counts.fail !== 0) { console.error("a clean install reported", r.counts.fail, "failure(s)"); process.exit(1) }
+            if (r.counts.warn === 0) { console.error("expected warnings on an unconfigured install"); process.exit(1) }
+          '
+          left="$(find "$scratch" -mindepth 1 | head -20)"
+          if [ -n "$left" ]; then echo "doctor created state on a clean install:"; echo "$left"; exit 1; fi
+          rm -rf "$scratch" doctor.json
 
       # The corpus is generated and committed, so a hand edit that drifts from the manifest fails
       # here the same way a stale config schema does.
