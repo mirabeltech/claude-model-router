@@ -30,7 +30,7 @@ const viaMock = (scenario) => ({
 
 const viaGemini = (scenario) => ({
   config: serverConfig(`${server.url}/s/${scenario}`, {
-    workers: { bulkRead: { provider: 'gemini', model: 'gemini-2.5-flash' } },
+    workers: { bulkRead: { provider: 'gemini', model: 'gemini-3.8-flash' } },
   }),
   env: { GEMINI_API_KEY: GEMINI_KEY },
 })
@@ -110,8 +110,8 @@ test('a provider that reports no cached or thinking tokens reports null, not zer
 
 test('the served model and the requested model are both reported, because they differ', async () => {
   const r = await run(viaGemini('ok'))
-  assert.equal(r.modelRequested, 'gemini-2.5-flash')
-  assert.equal(r.model, 'gemini-2.5-flash-001')
+  assert.equal(r.modelRequested, 'gemini-3.8-flash')
+  assert.equal(r.model, 'gemini-3.8-flash-001')
   assert.notEqual(r.model, r.modelRequested)
 })
 

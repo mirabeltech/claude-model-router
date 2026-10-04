@@ -465,7 +465,7 @@ const providerId = parsed.values.provider ?? config.worker.provider
     const where = problem.scope === 'worker' ? 'worker' : `workers.${problem.scope}`
     if (problem.status === 'mismatch') {
       // Name the fix. Setting only `worker.provider: ollama` leaves `worker.model` at
-      // gemini-2.5-flash, which is the single most likely way to land here.
+      // gemini-3.8-flash, which is the single most likely way to land here.
       const owned = config.providers?.[problem.provider]?.model
       s.findings.push(
         fail(

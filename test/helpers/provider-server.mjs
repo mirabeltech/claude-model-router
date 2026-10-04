@@ -133,7 +133,7 @@ function payloadFor(shape, scenario) {
 function geminiPayload(scenario) {
   const base = {
     candidates: [{ content: { parts: [{ text: TEXT }] }, finishReason: 'STOP' }],
-    modelVersion: 'gemini-2.5-flash-001',
+    modelVersion: 'gemini-3.8-flash-001',
     // promptTokenCount is INCLUSIVE of cachedContentTokenCount — the trap this
     // fixture exists to pin down.
     usageMetadata: { promptTokenCount: 1000, candidatesTokenCount: 120, totalTokenCount: 1120 },

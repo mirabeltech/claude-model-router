@@ -155,7 +155,7 @@ The default worker every lane inherits unless it names its own.
 | Setting | Type | Default | Range | Env var | Meaning |
 | --- | --- | --- | --- | --- | --- |
 | `worker.provider` | string | `"gemini"` | non-empty | `CMR_WORKER_PROVIDER` | Worker provider id, resolved through lib/providers/index.mjs. |
-| `worker.model` | string | `"gemini-2.5-flash"` | non-empty | `CMR_WORKER_MODEL` | Worker model id as the provider names it. |
+| `worker.model` | string | `"gemini-3.8-flash"` | non-empty | `CMR_WORKER_MODEL` | Worker model id as the provider names it. |
 | `worker.apiKeyEnv` | string | `"GEMINI_API_KEY"` | non-empty | `CMR_WORKER_API_KEY_ENV` | Name of the environment variable holding the worker API key. The key itself is never stored in config. |
 | `worker.timeoutMs` | int | `180000` | min 1000, max 1800000 | `CMR_WORKER_TIMEOUT_MS` | How long one worker call may take. A ceiling for a script, deliberately generous: the HOOK deadline is the tighter of the two and is what actually bounds a delegated read. A value above the HTTP client ceiling is reported, because the call would be abandoned there instead. |
 | `worker.maxRetries` | int | `2` | min 0, max 10 | `CMR_WORKER_MAX_RETRIES` | Retries after a failed worker call. A retry is only attempted for a failure that could plausibly succeed again; a refusal is never retried. |
@@ -187,7 +187,7 @@ Per-provider endpoints and capabilities.
 | Setting | Type | Default | Range | Env var | Meaning |
 | --- | --- | --- | --- | --- | --- |
 | `providers.gemini.baseUrl` | string | `"https://generativelanguage.googleapis.com/v1beta"` | non-empty | `CMR_GEMINI_BASE_URL` | Gemini API base URL. Override to reach a proxy or a regional endpoint. |
-| `providers.gemini.model` | string | `"gemini-2.5-flash"` | non-empty | `CMR_GEMINI_MODEL` | Model used when a lane names the gemini provider without inheriting worker.model. gemini-2.5-flash is the middle of the three the bundled pricing table knows. |
+| `providers.gemini.model` | string | `"gemini-3.8-flash"` | non-empty | `CMR_GEMINI_MODEL` | Model used when a lane names the gemini provider without inheriting worker.model. gemini-3.8-flash is Google own named successor to the retired gemini-2.5-flash, and the middle tier of the three the bundled pricing table knows. |
 | `providers.ollama.baseUrl` | string | `"http://127.0.0.1:11434"` | non-empty | `CMR_OLLAMA_BASE_URL` | Ollama daemon URL. The default is loopback, so nothing leaves the machine. |
 | `providers.ollama.model` | string | `"qwen2.5-coder:7b"` | non-empty | `CMR_OLLAMA_MODEL` | Default Ollama model, used when a lane names the provider but no model of its own. |
 | `providers.ollama.contextTokens` | int | `null` | min 256, max 10000000, nullable | `CMR_OLLAMA_CONTEXT_TOKENS` | Context window of the Ollama model, in tokens. null means unknown, and unknown is never treated as infinite: the window is discovered from the daemon, then looked up in the bundled table, and a request that still cannot be shown to fit is refused rather than silently truncated. Set this to override both. |

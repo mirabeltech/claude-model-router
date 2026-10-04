@@ -17,7 +17,7 @@
 
   "worker": {
     "provider": "gemini",
-    "model": "gemini-2.5-flash",
+    "model": "gemini-3.8-flash",
 
     // Point this at a different variable to keep several keys side by side, or
     // to use a name your CI already sets.

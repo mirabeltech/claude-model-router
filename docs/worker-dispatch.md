@@ -112,7 +112,7 @@ inheritance is deliberately **asymmetric**:
 | `apiKeyEnv` | only when the provider did | an env-var name is meaningless against a different provider |
 | `timeoutMs` | always | a millisecond budget carries no provider identity |
 
-The asymmetry exists for one concrete failure. `worker.model` defaults to `gemini-2.5-flash`, so
+The asymmetry exists for one concrete failure. `worker.model` defaults to `gemini-3.8-flash`, so
 `{"workers": {"codeWrite": {"provider": "ollama"}}}` with symmetric inheritance would ask Ollama
 for a Gemini model. `ollama.mjs` takes `model || providerConfig.model`, so the configured
 `qwen2.5-coder:7b` would never be consulted, the daemon would answer HTTP 200 with a "model not

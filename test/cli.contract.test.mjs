@@ -246,7 +246,7 @@ test('a missing credential produces guidance that names the platform-correct com
   // branch that matters is the one the reader is on.
   const ci = makeCleanInstall({
     label: 'guidance-key',
-    env: { CMR_WORKER_PROVIDER: 'gemini', CMR_WORKER_MODEL: 'gemini-2.5-flash' },
+    env: { CMR_WORKER_PROVIDER: 'gemini', CMR_WORKER_MODEL: 'gemini-3.8-flash' },
   })
   try {
     const r = run(ci, 'plugins/model-router/scripts/doctor.mjs', ['--offline', '--no-color'])

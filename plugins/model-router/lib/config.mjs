@@ -37,7 +37,7 @@ export const DEFAULTS = Object.freeze({
 
   worker: {
     provider: 'gemini',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.8-flash',
     apiKeyEnv: 'GEMINI_API_KEY',
     timeoutMs: 180000,
     maxRetries: 2,
@@ -80,7 +80,7 @@ export const DEFAULTS = Object.freeze({
       // flash rather than pro or flash-lite: it is the middle of the three the bundled pricing
       // table knows, and the one worth escalating TO — stronger than a 7B local model, far
       // cheaper than re-reading the file with the primary.
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.8-flash',
     },
     ollama: {
       baseUrl: 'http://127.0.0.1:11434',

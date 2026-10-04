@@ -182,7 +182,7 @@ test('a provider/model mismatch FAILS and names both sides', () => {
   const r = runDoctor({
     CMR_ENABLED: 'true',
     CMR_WORKER_PROVIDER: 'ollama',
-    CMR_WORKER_MODEL: 'gemini-2.5-flash',
+    CMR_WORKER_MODEL: 'gemini-3.8-flash',
   })
   const fails = linesOf(r.out, 'FAIL').join(' ')
   assert.match(fails, /provider\/model mismatch/)
@@ -243,7 +243,7 @@ test('a configured provider with no key is still a FAILURE and is not reclassifi
   const r = runDoctor({
     CMR_ENABLED: 'true',
     CMR_WORKER_PROVIDER: 'gemini',
-    CMR_WORKER_MODEL: 'gemini-2.5-flash',
+    CMR_WORKER_MODEL: 'gemini-3.8-flash',
   })
   const fails = linesOf(r.out, 'FAIL').join(' ')
   assert.match(fails, /GEMINI_API_KEY is not set/)
@@ -282,7 +282,7 @@ test('a lane that needs a key is checked even when the global provider does not'
     CMR_WORKER_PROVIDER: 'ollama',
     CMR_WORKER_MODEL: 'llama3:latest',
     CMR_BULK_READ_WORKER_PROVIDER: 'gemini',
-    CMR_BULK_READ_WORKER_MODEL: 'gemini-2.5-flash',
+    CMR_BULK_READ_WORKER_MODEL: 'gemini-3.8-flash',
   })
 
   const fails = linesOf(r.out, 'FAIL').join(' ')
@@ -545,7 +545,7 @@ test('one absent variable, two providers, opposite verdicts', () => {
   const gemini = runDoctor({
     ...shared,
     CMR_WORKER_PROVIDER: 'gemini',
-    CMR_WORKER_MODEL: 'gemini-2.5-flash',
+    CMR_WORKER_MODEL: 'gemini-3.8-flash',
   })
 
   assert.match(ollama.out, /provider readiness: ready/)

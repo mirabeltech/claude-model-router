@@ -29,7 +29,7 @@
     "codeWrite": {
       // Boilerplate is lower volume and more sensitive to quality.
       "provider": "gemini",
-      "model": "gemini-2.5-flash",
+      "model": "gemini-3.8-flash",
       "apiKeyEnv": "GEMINI_API_KEY",
       "timeoutMs": 120000
     }

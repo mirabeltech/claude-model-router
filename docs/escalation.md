@@ -60,11 +60,16 @@ measured. When the budget runs out the row records `out_of_time` in its escalati
 
 ### Which means the order is a real trade, not an obvious one
 
-| | latency on a CPU box | cost per 12 KB read | privacy |
+All three columns measured on this machine, 2026-10-04, same 13 KB file where possible:
+
+| | latency | cost per 12 KB read | privacy |
 |---|---|---|---|
-| Ollama 7B | 80–113 s (measured) | free | nothing leaves the machine |
-| Gemini flash | seconds | fractions of a cent | the file goes to Google |
+| Ollama `mistral:latest` (CPU) | **80–113 s**, and it did not finish 13 KB inside the 120 s maximum | free | nothing leaves the machine |
+| Gemini `gemini-3.8-flash` | **6.7 s** end to end for the same 13 KB file | fractions of a cent | the file goes to Google |
 | Claude (fall open) | immediate | ~3k context tokens | — |
+
+That is roughly **15x** on the same input, and the local model could not complete it at all inside
+the hook's hard ceiling.
 
 **`["ollama", "gemini"]` buys privacy and costs latency.** On a CPU-only machine tier one will
 often consume the budget on its own, so in practice you get Ollama-or-Claude and Gemini rarely

@@ -206,7 +206,7 @@ test('the table is only ever an assumption', () => {
 
 test('a silent table yields null rather than a guess', () => {
   assert.equal(bundledCapabilityFor('ollama', 'never-pulled'), null)
-  assert.equal(bundledCapabilityFor('gemini', 'gemini-2.5-flash'), null, 'gemini has no table, so it must stay unknown')
+  assert.equal(bundledCapabilityFor('gemini', 'gemini-3.8-flash'), null, 'gemini has no table, so it must stay unknown')
   assert.equal(bundledCapabilityFor('nonsense', 'llama3'), null)
   assert.equal(bundledCapabilityFor(null, null), null)
 })
@@ -230,11 +230,11 @@ test('coherence is decided negatively: only another provider’s claim is eviden
   // developer pulled — so an allowlist would reject every model nobody enumerated.
   assert.equal(checkProviderModel('ollama', 'llama3:latest').status, 'ok')
   assert.equal(checkProviderModel('ollama', 'my-weird-finetune:v2').status, 'ok')
-  assert.equal(checkProviderModel('gemini', 'gemini-2.5-flash').status, 'ok')
+  assert.equal(checkProviderModel('gemini', 'gemini-3.8-flash').status, 'ok')
 })
 
 test('THE PHASE-4 BUG: a gemini model under the ollama provider is a mismatch', () => {
-  const r = checkProviderModel('ollama', 'gemini-2.5-flash')
+  const r = checkProviderModel('ollama', 'gemini-3.8-flash')
   assert.equal(r.status, 'mismatch')
   assert.deepEqual([...r.claimedBy], ['gemini'])
   assert.match(r.reason, /named like a gemini model/)
@@ -253,14 +253,14 @@ test('ollama claims no naming shape, and that emptiness is deliberate', () => {
   assert.ok(Object.hasOwn(PROVIDER_MODEL_PATTERNS, 'ollama'))
   assert.equal(PROVIDER_MODEL_PATTERNS.ollama.length, 0)
   assert.deepEqual(providersClaimingModel('llama3:latest'), [])
-  assert.deepEqual(providersClaimingModel('gemini-2.5-flash'), ['gemini'])
+  assert.deepEqual(providersClaimingModel('gemini-3.8-flash'), ['gemini'])
   assert.deepEqual(providersClaimingModel('models/gemini-1.5-pro'), ['gemini'])
 })
 
 test('a lane that states its own mismatched model is reported', () => {
   const c = workerCoherence({
     worker: { provider: 'ollama', model: 'llama3:latest' },
-    workers: { bulkRead: { model: null }, codeWrite: { model: 'gemini-2.5-flash' } },
+    workers: { bulkRead: { model: null }, codeWrite: { model: 'gemini-3.8-flash' } },
   })
   assert.equal(c.ok, false)
   assert.deepEqual(c.problems.map((p) => p.scope), ['codeWrite'])
@@ -270,7 +270,7 @@ test('a lane that inherits is not reported twice', () => {
   // The inherited pair is already reported as `worker`; re-reporting it per lane would turn one
   // mistake into three.
   const c = workerCoherence({
-    worker: { provider: 'ollama', model: 'gemini-2.5-flash' },
+    worker: { provider: 'ollama', model: 'gemini-3.8-flash' },
     workers: { bulkRead: { model: null }, codeWrite: { model: null } },
   })
   assert.equal(c.ok, false)
@@ -279,14 +279,14 @@ test('a lane that inherits is not reported twice', () => {
 
 test('a lane provider switch is evaluated against the lane’s own provider', () => {
   const c = workerCoherence({
-    worker: { provider: 'gemini', model: 'gemini-2.5-flash' },
+    worker: { provider: 'gemini', model: 'gemini-3.8-flash' },
     workers: { bulkRead: { provider: 'ollama', model: 'llama3:latest' }, codeWrite: { model: null } },
   })
   assert.equal(c.ok, true, 'a lane on ollama with a local tag is coherent')
 })
 
 test('the shipped defaults are coherent', () => {
-  const c = workerCoherence({ worker: { provider: 'gemini', model: 'gemini-2.5-flash' }, workers: {} })
+  const c = workerCoherence({ worker: { provider: 'gemini', model: 'gemini-3.8-flash' }, workers: {} })
   assert.equal(c.ok, true)
   assert.deepEqual([...c.problems], [])
 })
@@ -294,7 +294,7 @@ test('the shipped defaults are coherent', () => {
 test('coherence never substitutes or suggests a model', () => {
   // Reporting is the whole contract. A config layer that silently picked a different model would
   // be the worst possible outcome of a provider switch.
-  const r = checkProviderModel('ollama', 'gemini-2.5-flash')
+  const r = checkProviderModel('ollama', 'gemini-3.8-flash')
   assert.deepEqual(Object.keys(r).sort(), ['claimedBy', 'model', 'provider', 'reason', 'status'])
-  assert.equal(r.model, 'gemini-2.5-flash', 'the reported model is the configured one, unchanged')
+  assert.equal(r.model, 'gemini-3.8-flash', 'the reported model is the configured one, unchanged')
 })

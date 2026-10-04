@@ -55,7 +55,7 @@ const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArr
  * A model id and an env-var name are meaningful only relative to a provider. Inheriting
  * `worker.model` across a provider change is the bug this asymmetry exists to prevent: with
  * `worker.model` at its default, `{workers: {codeWrite: {provider: 'ollama'}}}` would otherwise
- * ask Ollama for 'gemini-2.5-flash', and ollama.mjs takes `model || providerConfig.model`, so the
+ * ask Ollama for 'gemini-3.8-flash', and ollama.mjs takes `model || providerConfig.model`, so the
  * configured 'qwen2.5-coder:7b' would never be consulted. The daemon answers HTTP 200 with a
  * "model not found" body and the only clue is a Gemini model name in an Ollama error.
  *

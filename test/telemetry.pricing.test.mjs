@@ -65,7 +65,7 @@ test('a table with no pricingVersion is rejected — an event must be able to na
 /* ------------------------------------------------------------------- lookup */
 
 test('an exact provider and served model match wins first', () => {
-  const r = resolveRates(priced, { provider: 'gemini', servedModel: 'gemini-2.5-flash', requestedModel: 'gemini-2.5-flash' })
+  const r = resolveRates(priced, { provider: 'gemini', servedModel: 'gemini-3.8-flash', requestedModel: 'gemini-3.8-flash' })
   assert.equal(r.lookup, 'exact')
   assert.equal(r.rates.inputPerMTok, 0.3)
   assert.equal(r.pricingSource, 'file')
@@ -73,11 +73,11 @@ test('an exact provider and served model match wins first', () => {
 })
 
 test('a served model with a vendor suffix falls back to the requested name, not to a prefix match', () => {
-  // Gemini reports gemini-2.5-flash-001 for a configured gemini-2.5-flash.
+  // Gemini reports gemini-3.8-flash-001 for a configured gemini-3.8-flash.
   const r = resolveRates(priced, {
     provider: 'gemini',
-    servedModel: 'gemini-2.5-flash-001',
-    requestedModel: 'gemini-2.5-flash',
+    servedModel: 'gemini-3.8-flash-001',
+    requestedModel: 'gemini-3.8-flash',
   })
   assert.equal(r.lookup, 'requested_alias')
   assert.equal(r.rates.inputPerMTok, 0.3)
@@ -86,8 +86,8 @@ test('a served model with a vendor suffix falls back to the requested name, not 
 test('no prefix matching: an unknown variant is a refusal, never a known model\'s rate', () => {
   const r = resolveRates(priced, {
     provider: 'gemini',
-    servedModel: 'gemini-2.5-flash-thinking-max',
-    requestedModel: 'gemini-2.5-flash-thinking-max',
+    servedModel: 'gemini-3.8-flash-thinking-max',
+    requestedModel: 'gemini-3.8-flash-thinking-max',
   })
   assert.equal(r.lookup, 'model_unknown')
   assert.equal(r.rates, null)
@@ -102,9 +102,9 @@ test('a wildcard row prices a whole provider in one line', () => {
 
 test('the pricing key includes the provider, so a local model is never priced at cloud rates', () => {
   const table = pricedTable({
-    'ollama:gemini-2.5-flash': {
+    'ollama:gemini-3.8-flash': {
       provider: 'ollama',
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.8-flash',
       inputPerMTok: 0,
       cachedInputPerMTok: 0,
       outputPerMTok: 0,
@@ -113,14 +113,14 @@ test('the pricing key includes the provider, so a local model is never priced at
     },
   })
   const chain = [{ table, source: 'file' }]
-  const cloud = resolveRates(chain, { provider: 'gemini', servedModel: 'gemini-2.5-flash' })
-  const local = resolveRates(chain, { provider: 'ollama', servedModel: 'gemini-2.5-flash' })
+  const cloud = resolveRates(chain, { provider: 'gemini', servedModel: 'gemini-3.8-flash' })
+  const local = resolveRates(chain, { provider: 'ollama', servedModel: 'gemini-3.8-flash' })
   assert.equal(cloud.rates.inputPerMTok, 0.3)
   assert.equal(local.rates.inputPerMTok, 0)
 })
 
 test('an empty chain is no_table, which is distinct from an unknown model', () => {
-  const r = resolveRates([], { provider: 'gemini', servedModel: 'gemini-2.5-flash' })
+  const r = resolveRates([], { provider: 'gemini', servedModel: 'gemini-3.8-flash' })
   assert.equal(r.lookup, 'no_table')
   assert.equal(r.pricingSource, 'none')
   assert.equal(r.pricingVersion, null)
@@ -131,7 +131,7 @@ test('a null provider cannot be priced', () => {
 })
 
 test('a present row with null rates is exact, so it is distinguishable from an unknown model', () => {
-  const r = resolveRates(bundled, { provider: 'gemini', servedModel: 'gemini-2.5-flash' })
+  const r = resolveRates(bundled, { provider: 'gemini', servedModel: 'gemini-3.8-flash' })
   assert.equal(r.lookup, 'exact')
   assert.equal(r.rates.inputPerMTok, null)
   // Both yield a null cost; pricing_lookup is what tells an operator which fix applies.
@@ -146,9 +146,9 @@ test('an override row wins entirely — an absent rate does not inherit from the
     unit: 'per_mtok',
     currency: 'USD',
     models: {
-      'gemini:gemini-2.5-flash': {
+      'gemini:gemini-3.8-flash': {
         provider: 'gemini',
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         inputPerMTok: 0.3,
         verify: 'test',
         verifiedAt: null,
@@ -159,7 +159,7 @@ test('an override row wins entirely — an absent rate does not inherit from the
     { table: sparse, source: 'file' },
     { table: pricedTable(), source: 'bundled' },
   ]
-  const r = resolveRates(chain, { provider: 'gemini', servedModel: 'gemini-2.5-flash' })
+  const r = resolveRates(chain, { provider: 'gemini', servedModel: 'gemini-3.8-flash' })
   assert.equal(r.rates.inputPerMTok, 0.3)
   // A field-level merge would blend two price lists into a number nobody published.
   assert.equal(r.rates.outputPerMTok, null)
@@ -172,14 +172,14 @@ test('a one-row override does not shadow the lower table for every other model',
     unit: 'per_mtok',
     currency: 'USD',
     models: {
-      'gemini:gemini-2.5-flash': { provider: 'gemini', model: 'gemini-2.5-flash', inputPerMTok: 9, verify: 't', verifiedAt: null },
+      'gemini:gemini-3.8-flash': { provider: 'gemini', model: 'gemini-3.8-flash', inputPerMTok: 9, verify: 't', verifiedAt: null },
     },
   }
   const chain = [
     { table: oneRow, source: 'file' },
     { table: pricedTable(), source: 'bundled' },
   ]
-  const overridden = resolveRates(chain, { provider: 'gemini', servedModel: 'gemini-2.5-flash' })
+  const overridden = resolveRates(chain, { provider: 'gemini', servedModel: 'gemini-3.8-flash' })
   const untouched = resolveRates(chain, { provider: 'anthropic', servedModel: 'claude-opus-5' })
   assert.equal(overridden.rates.inputPerMTok, 9)
   assert.equal(overridden.pricingSource, 'file')

@@ -145,7 +145,7 @@ test('a missing tool_input is targeted, which is the refusing direction', () => 
 /* -------------------------------------------------------------- stdout: deny */
 
 test('the delegating response is exactly the four documented fields, nested under hookSpecificOutput', () => {
-  const res = buildDelegatedResponse({ text: 'a summary', provider: 'gemini', model: 'gemini-2.5-flash' })
+  const res = buildDelegatedResponse({ text: 'a summary', provider: 'gemini', model: 'gemini-3.8-flash' })
   assert.deepEqual(Object.keys(res), ['hookSpecificOutput'])
   assert.deepEqual(Object.keys(res.hookSpecificOutput).sort(), [
     'additionalContext',

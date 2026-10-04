@@ -18,8 +18,14 @@ them can be checked exactly, against the bytes, with no model, no network and no
 | Claim | How it is checked |
 |---|---|
 | ``` `Record1` on line 11 ``` | does `Record1` appear on line 11 of the file, within two lines? |
-| ``` `"Record1 requires an id"` ``` | does that literal appear anywhere in the file? |
+| ``` `"Record1 requires an id"` ``` | does that literal appear in the file, verbatim or by word overlap? |
 | ``` `getUserById` ``` | does that identifier appear anywhere in the file, or in its path? |
+
+**A claim that asserts an ABSENCE is skipped, not inverted.** "No `Record18` interface is
+declared" does not assert that `Record18` exists, so its absence is not evidence of invention —
+and a negation only negates what follows it, so "throws `"..."` when the input has no id" is
+still an ordinary positive claim. Both rules exist because a real answer broke the version without
+them.
 
 `lib/verify/summary.mjs` does this. It is pure and imports nothing: it is handed two strings and
 returns a verdict, which is what lets it sit on the hook's hot path and be tested against a real
@@ -37,10 +43,17 @@ have had anyway: the cost is one wasted worker call.
 A **false negative** puts an invented line number, symbol or literal into Claude's context, and
 everything after it inherits the error.
 
-Those costs are not comparable, so the check is tuned to favour the cheap mistake — a single wrong
-line reference or one invented literal is enough to discard. This is the opposite of a dashboard
-metric, where a false positive is noise somebody has to chase; it is why the advisory grounding
-check in the eval framework stays advisory and this one acts.
+Those costs are not comparable, so the check is tuned to favour the cheap mistake. This is the
+opposite of a dashboard metric, where a false positive is noise somebody has to chase; it is why
+the advisory grounding check in the eval framework stays advisory and this one acts.
+
+**But "favour the cheap mistake" is not the same as "trigger on anything", and the first version
+got that wrong.** It made a single wrong line reference or one absent literal fatal — rules tuned
+against a worker that made THREE claims. Tested against a real Gemini answer that made
+**thirty-six and got thirty-four right**, it discarded the whole summary. A detector that cannot
+tell one miss in thirty-six from three in three makes a good worker unusable, which is the
+opposite of its purpose. Every threshold is now a ratio, and the two populations measured nowhere
+near each other: **5.6% of claims wrong for a good answer, 100% for a fabrication.**
 
 ## The prompt had to change first
 

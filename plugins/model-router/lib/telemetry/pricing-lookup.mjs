@@ -9,8 +9,8 @@
  *     absent `outputPerMTok` is null (unpriced) rather than inherited from the bundled table.
  *     A field-level merge would blend two vendors' price lists into a number nobody published.
  *
- *  2. NO PREFIX, NORMALIZATION OR FUZZY MATCHING. A key of `gemini-2.5-flash` must not match a
- *     served `gemini-2.5-flash-thinking-max`: that would price an unknown model at a known
+ *  2. NO PREFIX, NORMALIZATION OR FUZZY MATCHING. A key of `gemini-3.8-flash` must not match a
+ *     served `gemini-3.8-flash-thinking-max`: that would price an unknown model at a known
  *     model's rate, which is a guessed rate. An unmatched model is a refusal, not a best effort.
  */
 
@@ -84,7 +84,7 @@ export function resolveRates(chain, { provider = null, servedModel = null, reque
   }
 
   // Candidate keys in priority order. `requested_alias` exists because Gemini reports
-  // `gemini-2.5-flash-001` for a configured `gemini-2.5-flash`, so the served name misses a table
+  // `gemini-3.8-flash-001` for a configured `gemini-3.8-flash`, so the served name misses a table
   // keyed on the configured name. The wildcard lets a user price all of one provider in one row.
   const candidates = []
   if (servedModel) candidates.push([keyFor(provider, servedModel), 'exact'])

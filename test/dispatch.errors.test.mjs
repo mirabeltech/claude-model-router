@@ -45,7 +45,7 @@ const geminiRun = (scenario, { maxRetries = 0 } = {}) =>
     decision: delegatingDecision(),
     config: serverConfig(
       `${server.url}/s/${scenario}`,
-      { workers: { bulkRead: { provider: 'gemini', model: 'gemini-2.5-flash' } } },
+      { workers: { bulkRead: { provider: 'gemini', model: 'gemini-3.8-flash' } } },
       { worker: { maxRetries } },
     ),
     input: bulkReadPayload(),

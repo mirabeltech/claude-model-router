@@ -22,10 +22,14 @@
  */
 
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
 import test from 'node:test'
 
+import { REPO_ROOT } from './helpers/telemetry-dir.mjs'
 import {
   LINE_TOLERANCE,
+  MAX_WRONG_LINE_RATIO,
   VERIFY_VERDICTS,
   describeVerification,
   verifySummary,
@@ -291,4 +295,103 @@ test('a verified or uncheckable answer gets no caveat at all', () => {
   assert.equal(describeVerification(verify(REAL_GOOD)), null)
   assert.equal(describeVerification(verify('Nothing checkable here.')), null)
   assert.equal(describeVerification(null), null)
+})
+
+/* ===================== the real answer that proved the first rules wrong ===================== */
+
+/**
+ * A REAL Gemini answer, captured verbatim, against the real corpus file it summarised.
+ *
+ * This fixture exists because it FAILED the first version of this module, and every rule added
+ * since is here to stop it failing again. It makes 36 line claims and gets 35 right — and the
+ * original "one wrong claim is fatal" rules discarded the whole summary, which would have made a
+ * good worker unusable. Three distinct false positives, each now its own test below.
+ *
+ * A verifier tuned against one worker's output is tuned against that worker. This is the second.
+ */
+
+const MEDIUM = fs.readFileSync(
+  path.join(REPO_ROOT, 'test', 'fixtures', 'corpus', 'medium.ts'),
+  'utf8',
+)
+const GEMINI_ANSWER = fs.readFileSync(
+  path.join(REPO_ROOT, 'test', 'fixtures', 'verify', 'gemini-medium-answer.txt'),
+  'utf8',
+)
+const realFiles = [{ path: 'medium.ts', content: MEDIUM }]
+const verifyReal = (answer = GEMINI_ANSWER) => verifySummary({ answer, files: realFiles })
+
+test('the real Gemini answer VERIFIES — 36 line claims, and it is not discarded', () => {
+  const r = verifyReal()
+  assert.equal(r.verdict, 'verified', `a good real answer must not be discarded: ${r.reason}`)
+  assert.ok(r.lineClaims.total >= 30, `expected a long answer, got ${r.lineClaims.total} claims`)
+  assert.equal(r.lineClaims.wrong, 0)
+})
+
+test('FALSE POSITIVE 1: a negated absence claim is not a fabricated symbol', () => {
+  // The worst of the three, because the verifier was punishing the worker for obeying the task.
+  // `medium.ts` carries a doc comment for a Record18 it never declares, and the answer says so:
+  //
+  //   "No `Record18` implementation: although line 401 contains ..., no `Record18` interface or
+  //    `normalizeRecord18` function is declared."
+  //
+  // Every symbol there is correctly absent. The first rules read it as two inventions on a wrong
+  // line and discarded the single most valuable sentence in the summary.
+  assert.match(GEMINI_ANSWER, /No `Record18`/, 'the fixture must still contain the sentence')
+  assert.equal(MEDIUM.includes('Record18'), false, 'and Record18 must still be absent from the file')
+
+  const r = verifyReal()
+  assert.equal(r.identifiers.examples.includes('Record18'), false, 'not counted as invented')
+  assert.equal(
+    r.lineClaims.examples.some((e) => e.includes('Record18')),
+    false,
+    'and not counted as a wrong line claim',
+  )
+})
+
+test('FALSE POSITIVE 2: a placeholder generalisation is not an invented literal', () => {
+  // Summarising seventeen near-identical declarations, the worker wrote `"RecordN requires an id"`
+  // to stand for `"Record1 requires an id"` through `"Record17 requires an id"`. Good summarising,
+  // and legitimately absent from the file — word overlap is what tells it from an invention.
+  assert.match(GEMINI_ANSWER, /RecordN requires an id/)
+  assert.equal(MEDIUM.includes('RecordN requires an id'), false)
+  assert.equal(verifyReal().literals.ungrounded, 0, 'the generalisation is grounded by overlap')
+
+  // And the discrimination still holds: an invention shares nothing with the file.
+  const invented = verifySummary({
+    answer: 'It throws `"user not found in registry"` on failure.',
+    files: realFiles,
+  })
+  assert.equal(invented.literals.ungrounded, 1)
+  assert.equal(invented.verdict, 'suspect')
+})
+
+test('FALSE POSITIVE 3: the file NAME cited with a line number is not a symbol claim', () => {
+  // The answer opens "As documented in lines 1-6 of `medium.ts`", and `medium` is not in the
+  // file's text — only in its path. The path is in the identifier lexicon; it had to be in the
+  // line check too.
+  const r = verifySummary({
+    answer: 'As documented in line 1 of `medium.ts`, this is a synthetic module.',
+    files: realFiles,
+  })
+  assert.equal(r.lineClaims.wrong, 0, 'a filename is not a claim about the contents')
+})
+
+test('a ratio, not an absolute: one wrong claim in thirty-six is noise, one in three is evidence', () => {
+  // The rule the real answer forced. Both populations are measured, and they are nowhere near
+  // each other: 5.6% wrong for a good answer, 100% for a fabrication.
+  assert.equal(MAX_WRONG_LINE_RATIO, 0.34)
+
+  const fabricated = verifySummary({
+    answer:
+      'This declares `getUserByEmail` on line 412. It declares `AuditLogWriter` on line 980. ' +
+      'It declares `TenantRegistry` on line 1400.',
+    files: realFiles,
+  })
+  assert.equal(fabricated.verdict, 'suspect')
+  assert.equal(fabricated.lineClaims.wrong, 3)
+
+  // And a single wrong claim, with nothing else to weigh it against, is still suspect.
+  const lonely = verifySummary({ answer: '`Entity` is declared on line 980.', files: realFiles })
+  assert.equal(lonely.verdict, 'suspect')
 })

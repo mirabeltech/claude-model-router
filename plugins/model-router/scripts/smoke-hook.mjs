@@ -12,7 +12,7 @@
  * Usage:
  *   node plugins/model-router/scripts/smoke-hook.mjs
  *   node plugins/model-router/scripts/smoke-hook.mjs --model mistral:latest
- *   node plugins/model-router/scripts/smoke-hook.mjs --provider gemini --model gemini-2.5-flash
+ *   node plugins/model-router/scripts/smoke-hook.mjs --provider gemini --model gemini-3.8-flash
  *   node plugins/model-router/scripts/smoke-hook.mjs --file path/to/big-file.ts
  *   node plugins/model-router/scripts/smoke-hook.mjs --scenario context-exceeded
  *   node plugins/model-router/scripts/smoke-hook.mjs --scenario unavailable
@@ -214,6 +214,19 @@ child.on('close', (code) => {
       // NO FALSE WORKER USAGE on a path that produced none. Reported here rather than left to the
       // reader, because this is the whole reason a refusal is safe to record at all.
       console.log(`  usage:    in=${row.worker_input_tokens} out=${row.worker_output_tokens}  (null means nothing was measured)`)
+      // THE VERDICT BELONGS ON THIS BRANCH TOO. A successful call whose answer was DISCARDED by
+      // verification looks identical to a failed call from here — status ok, no output — and
+      // without the verdict an operator cannot tell "the worker broke" from "the worker lied".
+      if (row.summary_verify_verdict !== null && row.summary_verify_verdict !== undefined) {
+        console.log(
+          `  verified: ${row.summary_verify_verdict}` +
+            (row.summary_verify_reason ? `  ${row.summary_verify_reason}` : '') +
+            (row.summary_line_claims === null
+              ? ''
+              : `  (${row.summary_line_claims - row.summary_line_claims_wrong}/${row.summary_line_claims} line references confirmed)`),
+        )
+      }
+      if (row.escalation_path) console.log(`  ladder:   ${row.escalation_path}`)
     } else {
       console.log('  no telemetry row was written, so the hook stopped before reaching the gate.')
     }

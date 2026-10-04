@@ -67,9 +67,9 @@ export const BUNDLED_PRICING = Object.freeze({
   unit: 'per_mtok',
   currency: 'USD',
   models: Object.freeze({
-    'gemini:gemini-2.5-flash': row('gemini', 'gemini-2.5-flash', 'https://ai.google.dev/pricing'),
-    'gemini:gemini-2.5-flash-lite': row('gemini', 'gemini-2.5-flash-lite', 'https://ai.google.dev/pricing'),
-    'gemini:gemini-2.5-pro': row('gemini', 'gemini-2.5-pro', 'https://ai.google.dev/pricing'),
+    'gemini:gemini-3.8-flash': row('gemini', 'gemini-3.8-flash', 'https://ai.google.dev/pricing'),
+    'gemini:gemini-3.5-flash-lite': row('gemini', 'gemini-3.5-flash-lite', 'https://ai.google.dev/pricing'),
+    'gemini:gemini-3.1-pro-preview': row('gemini', 'gemini-3.1-pro-preview', 'https://ai.google.dev/pricing'),
 
     // Wildcard: local inference has no per-token bill. Users who do not track hardware cost can
     // set these to 0 in an override, which yields a genuine `actual` zero rather than a NULL.

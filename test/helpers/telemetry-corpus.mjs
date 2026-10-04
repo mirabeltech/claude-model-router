@@ -43,8 +43,8 @@ function rng(seed) {
 }
 
 const PROVIDERS = Object.freeze([
-  { provider: 'gemini', model: 'gemini-2.5-flash', ctx: 1048576, source: 'bundled_default', status: 'assumed' },
-  { provider: 'gemini', model: 'gemini-2.5-pro', ctx: 1048576, source: 'bundled_default', status: 'assumed' },
+  { provider: 'gemini', model: 'gemini-3.8-flash', ctx: 1048576, source: 'bundled_default', status: 'assumed' },
+  { provider: 'gemini', model: 'gemini-3.1-pro-preview', ctx: 1048576, source: 'bundled_default', status: 'assumed' },
   { provider: 'ollama', model: 'llama3.1:8b', ctx: 8192, source: 'provider_api', status: 'measured' },
   { provider: 'ollama', model: 'qwen2.5-coder:7b', ctx: 32768, source: 'provider_api', status: 'measured' },
 ])

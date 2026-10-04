@@ -277,3 +277,33 @@ Before phase 12, none of §4 and only part of §7 had a test: `budget_threw`, `b
 `serialize_failed` and `carcass_over_cap` appeared nowhere under `test/`. "It degrades gracefully"
 was covered; "it says what went wrong" was not, and those are the same thing to a `try/catch` and
 completely different things to an operator.
+
+---
+
+## Observed but not reproduced: a native crash on the hosted provider path
+
+Recorded rather than dropped, because the hook's contract is absolute — **always exit 0, never
+write to stderr** — and this violates both.
+
+Twice during live Gemini testing on Windows (2026-10-04), `hooks/pre-tool-use.mjs` exited
+`3221226505` (`0xC0000409`) with this on stderr:
+
+```
+Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file src\win\async.c, line 94
+```
+
+That is libuv, during process teardown — something signalling an async handle that is already
+closing. It did **not** reproduce across six subsequent runs on the same path, and has never been
+seen on the Ollama path, so it is timing-dependent and most likely a race between `process.exit(0)`
+and an in-flight TLS socket teardown that the local HTTP path does not have.
+
+**What it costs, and why it is not a release blocker.** The response had already been written when
+it happened, and an exit code other than `0` or `2` is non-blocking for a `PreToolUse` hook — so
+the session proceeds either way. What is lost is the guarantee itself: the smoke script's own
+pass condition requires `exit 0` and empty stderr, and it correctly reported those runs as not
+usable.
+
+**Not fixed, because it is not understood.** The obvious candidate — disabling HTTP keep-alive so
+no socket outlives the request — is a plausible guess, and shipping a guess as a fix for a race
+nobody can reproduce would make the next occurrence harder to diagnose, not easier. It is written
+down here so that a second sighting has somewhere to attach.

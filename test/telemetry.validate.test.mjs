@@ -136,7 +136,7 @@ test('text and boolean fields refuse the wrong type rather than stringifying it'
   assert.equal(toText(42, 'model', w), null)
   assert.equal(toBool('yes', 'truncated', w), null)
   assert.equal(w.count, 2)
-  assert.equal(toText('gemini-2.5-flash', 'model'), 'gemini-2.5-flash')
+  assert.equal(toText('gemini-3.8-flash', 'model'), 'gemini-3.8-flash')
   assert.equal(toBool(false, 'truncated'), false)
 })
 

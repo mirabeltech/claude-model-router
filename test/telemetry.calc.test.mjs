@@ -26,7 +26,7 @@ import {
 } from '../plugins/model-router/lib/telemetry/calc.mjs'
 import { caps, pricedTable, usage } from './helpers/telemetry-dir.mjs'
 
-const RATES = pricedTable().models['gemini:gemini-2.5-flash']
+const RATES = pricedTable().models['gemini:gemini-3.8-flash']
 const FREE = { inputPerMTok: 0, cachedInputPerMTok: 0, outputPerMTok: 0 }
 
 /* ---------------------------------------------------------------- primitives */

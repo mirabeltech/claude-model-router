@@ -53,6 +53,26 @@ export const VERIFY_VERDICTS = Object.freeze(['verified', 'suspect', 'not_checka
  */
 export const LINE_TOLERANCE = 2
 
+/**
+ * The share of line claims that may be wrong before an answer is suspect.
+ *
+ * A third, which is deliberately generous. MEASURED: a real Gemini answer made 36 line claims and
+ * got 34 right (5.6% wrong) while a fabrication got 0 of 3 right (100% wrong). The two populations
+ * are nowhere near each other, so a threshold anywhere between them works and the loose end is the
+ * safe one — a false positive discards a good answer.
+ */
+export const MAX_WRONG_LINE_RATIO = 0.34
+
+/**
+ * The share of quoted literals that may be absent before an answer is suspect.
+ *
+ * Also a third, and for a reason the same measurement exposed: a worker summarising a family of
+ * near-identical declarations writes `"RecordN requires an id"` as a GENERALISATION of
+ * `"Record1 requires an id"` through `"Record17 requires an id"`. That is good summarising and the
+ * literal is legitimately absent.
+ */
+export const MAX_UNGROUNDED_LITERAL_RATIO = 0.34
+
 /** Identifier-shaped, and at least three characters so `id`, `fs` and `of` do not dominate. */
 const IDENTIFIER = /[A-Za-z_$][A-Za-z0-9_$]{2,}/g
 
@@ -74,6 +94,48 @@ const QUOTED = /"([^"\n]{4,})"|'([^'\n]{4,})'/g
 const LINE_MENTION = /\blines?\s+(\d{1,5})\b/gi
 
 const clamp = (s, n = 80) => (s.length > n ? `${s.slice(0, n)}…` : s)
+
+/**
+ * A sentence that ASSERTS AN ABSENCE, which must never be checked as if it asserted a presence.
+ *
+ * THE FAILURE THIS FIXES, found against a real Gemini answer. The task asks the worker to "state
+ * what the file does not do where that is load-bearing", and it did exactly that:
+ *
+ *   "No `Record18` implementation: although line 401 contains a doc comment for it, no `Record18`
+ *    interface or `normalizeRecord18` function is declared."
+ *
+ * Every one of those symbols is correctly absent from the file. The first version of this module
+ * read the sentence as three fabricated claims and discarded the whole summary — punishing the
+ * worker for the single most valuable sentence in it, and for obeying the task.
+ *
+ * A negated claim is not checkable by "is this symbol present", so it is SKIPPED rather than
+ * inverted: confirming an absence would need to rule out every spelling the worker might have
+ * meant. Skipping neither confirms nor refutes, which is the honest answer.
+ */
+const NEGATION = /\b(no|not|never|without|absent|missing|lacks?|lacking|nor|neither|does ?n[o']?t|is ?n[o']?t|are ?n[o']?t|cannot|unimplemented|undeclared|undefined)\b/i
+
+/**
+ * Is this sentence asserting an absence?
+ *
+ * TWO SCOPES, each learned from a case that got it wrong.
+ *
+ * PROSE ONLY, with code spans and quoted literals stripped: the worker's own quoted content is not
+ * the worker's grammar. `"user not found in registry"` is an INVENTED LITERAL inside an ordinary
+ * positive claim, and testing the raw sentence found the `not` inside the quotes, decided the
+ * sentence asserted an absence, and skipped the check — turning the clearest fabrication signal
+ * available into silence.
+ *
+ * BEFORE THE CLAIM, not anywhere in the sentence. A negation negates what FOLLOWS it:
+ *
+ *   "No `Record18` interface is declared"                      -> absence, skip the claim
+ *   "throws `"Record1 requires an id"` when input has no id"   -> a POSITIVE claim that happens
+ *                                                                 to contain a later negation
+ *
+ * Whole-sentence testing skipped the second one too, and silently stopped checking a literal that
+ * was genuinely present. Position is the cheapest signal that separates them without parsing.
+ */
+const assertsAbsence = (sentence, before = Number.POSITIVE_INFINITY) =>
+  NEGATION.test(String(sentence).slice(0, before).replace(CODE_SPAN, ' ').replace(QUOTED, ' '))
 
 /** Split into sentences, keeping it crude: a claim does not span a full stop. */
 const sentencesOf = (text) =>
@@ -98,6 +160,8 @@ export function verifySummary({
   files,
   lineTolerance = LINE_TOLERANCE,
   maxUngroundedRatio = 0.25,
+  maxWrongLineRatio = MAX_WRONG_LINE_RATIO,
+  maxUngroundedLiteralRatio = MAX_UNGROUNDED_LITERAL_RATIO,
 } = {}) {
   const empty = (reason) =>
     Object.freeze({
@@ -118,6 +182,7 @@ export function verifySummary({
   // legitimately part of the material it was given. Leaving them out flagged `tiny`, `real` and
   // `ts` as invented on the first run against a real answer.
   const lexicon = new Set()
+  const pathTokens = new Set()
   const fileLines = []
   let corpus = ''
   for (const file of files) {
@@ -125,6 +190,10 @@ export function verifySummary({
     const path = typeof file?.path === 'string' ? file.path : ''
     corpus += `${content}\n`
     for (const m of `${content}\n${path}`.matchAll(IDENTIFIER)) lexicon.add(m[0].toLowerCase())
+    // Separately, because a line claim is checked against LINES and a path has none. A real
+    // answer opened with "As documented in lines 1-6 of `medium.ts`", and the filename was read
+    // as a symbol claimed to be on line 1 and therefore absent.
+    for (const m of path.matchAll(IDENTIFIER)) pathTokens.add(m[0].toLowerCase())
     fileLines.push(...content.split('\n'))
   }
   if (lexicon.size === 0) return empty('no_content')
@@ -168,6 +237,8 @@ export function verifySummary({
     }
     const first = best === null ? null : best[1].match(IDENTIFIER)
     if (first === null || first.length === 0) continue
+    // An absence claim is not a claim that the symbol is on that line.
+    if (assertsAbsence(sentence, best.index ?? 0)) continue
     lineClaims.push({ name: first[0], line: Number(mentions[0][1]) })
   }
 
@@ -175,6 +246,11 @@ export function verifySummary({
   let lineWrong = 0
   const lineExamples = []
   for (const claim of lineClaims) {
+    // A reference to the file's own name is not a claim about its contents.
+    if (pathTokens.has(claim.name.toLowerCase())) {
+      lineVerified += 1
+      continue
+    }
     const from = Math.max(0, claim.line - 1 - lineTolerance)
     const to = Math.min(fileLines.length, claim.line + lineTolerance)
     const near = fileLines.slice(from, to).some((l) => l.includes(claim.name))
@@ -202,29 +278,64 @@ export function verifySummary({
   /* ---- check 2: quoted string literals ---- */
 
   const literals = new Set()
-  for (const m of answer.matchAll(QUOTED)) {
+  for (const sentence of sentencesOf(answer)) {
+    for (const m of sentence.matchAll(QUOTED)) {
+    if (assertsAbsence(sentence, m.index ?? 0)) continue
     const text = (m[1] ?? m[2] ?? '').trim()
     // A literal containing a newline, or one that is plainly a sentence of prose, is not a code
     // literal claim. The length floor plus "no sentence-ending punctuation" is a crude filter and
     // deliberately so: a false ACCEPT here costs nothing, a false REJECT costs a good summary.
     if (text.length >= 4 && !/[.!?]$/.test(text)) literals.add(text)
+    }
   }
+  /*
+   * A literal is grounded VERBATIM, or by overlap — and the second clause is not leniency, it is
+   * what tells a GENERALISATION apart from an INVENTION.
+   *
+   * MEASURED. Summarising a family of near-identical declarations, a real worker wrote
+   * `"RecordN requires an id"` to stand for `"Record1 requires an id"` through
+   * `"Record17 requires an id"`. That is good summarising and the literal is legitimately absent.
+   * A fabrication — `"user not found in registry"` — shares nothing with the file at all.
+   *
+   * Word overlap separates them cleanly and costs one pass: the generalisation keeps every word
+   * but the placeholder, the invention keeps none. Whole-literal substring search would be the
+   * obvious alternative and is quadratic against a large corpus for no extra signal.
+   */
+  const corpusWords = new Set()
+  for (const m of corpus.matchAll(/[A-Za-z_$][A-Za-z0-9_$]+/g)) corpusWords.add(m[0].toLowerCase())
+
+  const OVERLAP_FLOOR = 0.7
   let litGrounded = 0
   let litUngrounded = 0
   const litExamples = []
   for (const text of literals) {
-    if (corpus.includes(text)) litGrounded += 1
-    else {
-      litUngrounded += 1
-      if (litExamples.length < 5) litExamples.push(clamp(text))
+    if (corpus.includes(text)) {
+      litGrounded += 1
+      continue
     }
+    // Two characters, not three: `an` and `id` are exactly the words a generalisation keeps and a
+    // length-three floor throws away, which left `"RecordN requires an id"` scoring 1 of 2.
+    const words = [...text.matchAll(/[A-Za-z_$][A-Za-z0-9_$]+/g)].map((m) => m[0].toLowerCase())
+    const hits = words.filter((w) => corpusWords.has(w)).length
+    const overlap = words.length === 0 ? 0 : hits / words.length
+    if (overlap >= OVERLAP_FLOOR) {
+      litGrounded += 1
+      continue
+    }
+    litUngrounded += 1
+    if (litExamples.length < 5) litExamples.push(clamp(text))
   }
 
   /* ---- check 3: backticked identifiers ---- */
 
   const identifiers = new Set()
-  for (const span of answer.matchAll(CODE_SPAN)) {
-    for (const id of span[1].matchAll(IDENTIFIER)) identifiers.add(id[0])
+  for (const sentence of sentencesOf(answer)) {
+    // Same rule as the line claims: "no `Record18` is declared" does not assert that `Record18`
+    // exists, so its absence is not evidence of invention.
+    for (const span of sentence.matchAll(CODE_SPAN)) {
+      if (assertsAbsence(sentence, span.index ?? 0)) continue
+      for (const id of span[1].matchAll(IDENTIFIER)) identifiers.add(id[0])
+    }
   }
   let idGrounded = 0
   let idUngrounded = 0
@@ -248,13 +359,26 @@ export function verifySummary({
   }
 
   const ungroundedRatio = identifiers.size === 0 ? 0 : idUngrounded / identifiers.size
+  const wrongLineRatio = lineClaims.length === 0 ? 0 : lineWrong / lineClaims.length
+  const ungroundedLiteralRatio = literals.size === 0 ? 0 : litUngrounded / literals.size
   const reasons = []
-  // A WRONG LINE OR AN INVENTED LITERAL IS ENOUGH ON ITS OWN. Neither has a benign explanation:
-  // the file was in the prompt, and both claims are exactly checkable.
-  if (lineWrong > 0) reasons.push(`line_claims_wrong:${lineWrong}`)
-  if (litUngrounded > 0) reasons.push(`literals_absent:${litUngrounded}`)
-  // Identifiers get a ratio rather than a trigger, because a long answer legitimately names a few
-  // things the file does not contain — a type from a library, a concept from the task.
+
+  /*
+   * EVERY THRESHOLD IS A RATIO. The first version made one wrong line claim or one absent literal
+   * fatal on its own, which was tuned against a worker that made THREE claims — and it discarded
+   * a real Gemini answer that made THIRTY-SIX and got thirty-four right.
+   *
+   * One miss in three is evidence. One in thirty-six is noise: a doc-comment boundary beyond the
+   * tolerance, a symbol that appears in several places, a generalisation like `RecordN` standing
+   * for Record1 through Record17. A detector that cannot tell those apart makes a good worker
+   * unusable, which is the opposite of what it is for.
+   */
+  if (wrongLineRatio > maxWrongLineRatio) {
+    reasons.push(`line_claims_wrong:${lineWrong}/${lineClaims.length}`)
+  }
+  if (ungroundedLiteralRatio > maxUngroundedLiteralRatio) {
+    reasons.push(`literals_absent:${litUngrounded}/${literals.size}`)
+  }
   if (ungroundedRatio > maxUngroundedRatio) {
     reasons.push(`identifiers_absent:${idUngrounded}/${identifiers.size}`)
   }

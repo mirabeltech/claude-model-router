@@ -143,8 +143,8 @@ it is why token budgets are the only dimension that binds on a default install �
 zero rather than an unknown, so a dollar ceiling simply does not apply to it.
 
 Lookup is `provider:servedModel` → `provider:requestedModel` → `provider:*`, first hit wins.
-There is **no prefix, normalisation or fuzzy matching**: matching `gemini-2.5-flash` onto a served
-`gemini-2.5-flash-thinking-max` would price an unknown model at a known model's rate, which is a
+There is **no prefix, normalisation or fuzzy matching**: matching `gemini-3.8-flash` onto a served
+`gemini-3.8-flash-thinking-max` would price an unknown model at a known model's rate, which is a
 guessed rate. An unmatched model is a refusal.
 
 Tables are **never merged**, at row granularity. An override row for a model wins *entirely*; an

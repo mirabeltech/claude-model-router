@@ -472,7 +472,7 @@ test('the shipped defaults this phase promised not to change', () => {
   // from a sentence in a commit message into a diff somebody has to justify.
   assert.deepEqual(DEFAULTS.worker, {
     provider: 'gemini',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.8-flash',
     apiKeyEnv: 'GEMINI_API_KEY',
     timeoutMs: 180000,
     maxRetries: 2,

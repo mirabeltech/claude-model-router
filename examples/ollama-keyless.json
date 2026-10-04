@@ -13,7 +13,7 @@
 
   "worker": {
     // SET BOTH. Setting only the provider leaves `model` at its default of
-    // gemini-2.5-flash, which Ollama does not own, and `npm run doctor` reports
+    // gemini-3.8-flash, which Ollama does not own, and `npm run doctor` reports
     // a provider/model mismatch as a FAILURE. It is the single most common way
     // to misconfigure this plugin.
     "provider": "ollama",

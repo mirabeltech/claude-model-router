@@ -51,7 +51,7 @@ Then create `<your-project>/.claude/model-router.json`:
 }
 ```
 
-**Set both fields.** Setting only `provider` leaves `model` at its default of `gemini-2.5-flash`,
+**Set both fields.** Setting only `provider` leaves `model` at its default of `gemini-3.8-flash`,
 which Ollama does not own, and doctor reports a provider/model mismatch. It is the most common way
 to misconfigure this plugin.
 
@@ -112,7 +112,7 @@ From a clone, the fastest honest check runs the real shipped hook against a real
 
 ```bash
 npm run smoke:hook                            # Ollama, with the model from step 2
-npm run smoke:hook -- --provider gemini --model gemini-2.5-flash
+npm run smoke:hook -- --provider gemini --model gemini-3.8-flash
 ```
 
 It prints the hook's decision, the worker's answer and the telemetry row that was written. Exit 0

@@ -42,7 +42,7 @@ cannot quietly move it.
 | Provider | Key | Context discovery | Live-tested at V1 |
 |---|---|---|---|
 | `ollama` | none | **yes**, from the daemon's `/api/show` | **yes** — three scenarios, see §6 |
-| `gemini` | `GEMINI_API_KEY` | **no** — see §5 | **no** — no key available, reported as unavailable |
+| `gemini` | `GEMINI_API_KEY` | **no** — see §5 | **yes** — `gemini-3.8-flash`, 6.7 s on a 13 KB file |
 | `mock` | `MOCK_WORKER_URL` | no | yes, throughout the suite |
 
 Worker modes: `bulk-reader` is the only one reachable. `code-writer` exists as a mode identifier and

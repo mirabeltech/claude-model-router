@@ -61,9 +61,9 @@ test('CMR_ENABLED=0 is an effective kill switch', () => {
 
 test('plugin userConfig options are applied', () => {
   const { config, sources } = resolveConfig({
-    env: { CLAUDE_PLUGIN_OPTION_WORKER_MODEL: 'gemini-2.5-pro' },
+    env: { CLAUDE_PLUGIN_OPTION_WORKER_MODEL: 'gemini-3.1-pro-preview' },
   })
-  assert.equal(config.worker.model, 'gemini-2.5-pro')
+  assert.equal(config.worker.model, 'gemini-3.1-pro-preview')
   assert.equal(sources['worker.model'], 'pluginOption:CLAUDE_PLUGIN_OPTION_WORKER_MODEL')
 })
 

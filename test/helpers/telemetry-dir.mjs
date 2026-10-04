@@ -65,7 +65,7 @@ export function telemetryConfig(dir, overrides = {}) {
   return {
     enabled: true,
     projectDir: dir,
-    worker: { provider: 'gemini', model: 'gemini-2.5-flash' },
+    worker: { provider: 'gemini', model: 'gemini-3.8-flash' },
     pricing: { source: 'bundled', overrides: null },
     telemetry: {
       enabled: true,
@@ -128,9 +128,9 @@ export function pricedTable(overrides = {}) {
     unit: 'per_mtok',
     currency: 'USD',
     models: {
-      'gemini:gemini-2.5-flash': {
+      'gemini:gemini-3.8-flash': {
         provider: 'gemini',
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         inputPerMTok: 0.3,
         cachedInputPerMTok: 0.075,
         outputPerMTok: 2.5,

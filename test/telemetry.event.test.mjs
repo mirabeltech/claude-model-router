@@ -31,7 +31,7 @@ const bundledChain = [{ table: BUNDLED_PRICING, source: 'bundled' }]
 const result = (o = {}) => ({
   text: 'a summary of three files',
   usage: usage(),
-  model: 'gemini-2.5-flash',
+  model: 'gemini-3.8-flash',
   providerLatencyMs: 820,
   truncated: false,
   finishReason: 'STOP',
@@ -137,7 +137,7 @@ test('the full savings chain resolves when a primary model is set and priced', (
 test('a stored row can be recomputed from its own fields — router verify in miniature', () => {
   const e = event({}, { primaryModel: 'claude-opus-5' })
   // Every money field is reproducible from the row plus the table its pricing_version names.
-  const rates = pricedChain()[0].table.models['gemini:gemini-2.5-flash']
+  const rates = pricedChain()[0].table.models['gemini:gemini-3.8-flash']
   const primary = pricedChain()[0].table.models['anthropic:claude-opus-5']
   assert.equal(e.worker_input_cost, (e.worker_input_tokens * rates.inputPerMTok) / 1e6)
   assert.equal(e.worker_cached_input_cost, (e.worker_cached_input_tokens * rates.cachedInputPerMTok) / 1e6)
@@ -228,9 +228,9 @@ test('an unknown model is distinguishable from a deliberately unpriced one', () 
 })
 
 test('the served model and the requested model are both recorded for the alias path', () => {
-  const e = event({ result: result({ model: 'gemini-2.5-flash-001' }) })
-  assert.equal(e.model, 'gemini-2.5-flash-001')
-  assert.equal(e.model_requested, 'gemini-2.5-flash')
+  const e = event({ result: result({ model: 'gemini-3.8-flash-001' }) })
+  assert.equal(e.model, 'gemini-3.8-flash-001')
+  assert.equal(e.model_requested, 'gemini-3.8-flash')
   assert.equal(e.pricing_lookup, 'requested_alias')
   assert.notEqual(e.worker_input_cost, null, 'the alias must still price')
 })

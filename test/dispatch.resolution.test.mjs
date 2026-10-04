@@ -62,7 +62,7 @@ test('every INHERITING lane field is null, and ladder has no counterpart to inhe
 /* ------------------------------------------------- the cross-provider asymmetry */
 
 test('changing a lane provider does NOT carry the global model across — it falls to that provider', () => {
-  // The regression this asymmetry exists for. worker.model is 'gemini-2.5-flash'; ollama.mjs
+  // The regression this asymmetry exists for. worker.model is 'gemini-3.8-flash'; ollama.mjs
   // takes `model || providerConfig.model`, so an inherited Gemini model would mask the configured
   // 'qwen2.5-coder:7b' and the daemon would answer HTTP 200 with a "model not found" body.
   const r = resolveWorker(dispatchConfig({ workers: { codeWrite: { provider: 'ollama' } } }), 'codeWrite')
@@ -91,11 +91,11 @@ test('a lane that restates the global provider still inherits its model and key'
 
 test('an explicit lane model or key always wins, inherited provider or not', () => {
   const a = resolveWorker(
-    dispatchConfig({ workers: { bulkRead: { model: 'gemini-2.5-pro', apiKeyEnv: 'BULK_KEY' } } }),
+    dispatchConfig({ workers: { bulkRead: { model: 'gemini-3.1-pro-preview', apiKeyEnv: 'BULK_KEY' } } }),
     'bulkRead',
   )
   assert.equal(a.provider, DEFAULTS.worker.provider)
-  assert.equal(a.model, 'gemini-2.5-pro')
+  assert.equal(a.model, 'gemini-3.1-pro-preview')
   assert.equal(a.apiKeyEnv, 'BULK_KEY')
 
   const b = resolveWorker(

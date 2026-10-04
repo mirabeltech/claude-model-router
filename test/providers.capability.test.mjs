@@ -30,7 +30,7 @@ import { startProviderServer } from './helpers/provider-server.mjs'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const MODULES = [
-  { id: 'gemini', mod: gemini, model: 'gemini-2.5-flash', env: { GEMINI_API_KEY: 'AIzaTESTKEYTESTKEYTESTKEY' } },
+  { id: 'gemini', mod: gemini, model: 'gemini-3.8-flash', env: { GEMINI_API_KEY: 'AIzaTESTKEYTESTKEYTESTKEY' } },
   { id: 'ollama', mod: ollama, model: 'qwen2.5-coder:7b', env: {} },
   { id: 'mock', mod: mock, model: 'mock-1', env: { MOCK_WORKER_URL: 'http://127.0.0.1:1' } },
 ]

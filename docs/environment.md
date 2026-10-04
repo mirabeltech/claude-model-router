@@ -17,7 +17,7 @@ option. This is how CI pins behaviour and how the kill switches work. What each 
 | --- | --- | --- | --- | --- |
 | `CMR_ENABLED` | `enabled` | bool | `true` | no |
 | `CMR_WORKER_PROVIDER` | `worker.provider` | string | `"gemini"` | no |
-| `CMR_WORKER_MODEL` | `worker.model` | string | `"gemini-2.5-flash"` | no |
+| `CMR_WORKER_MODEL` | `worker.model` | string | `"gemini-3.8-flash"` | no |
 | `CMR_WORKER_API_KEY_ENV` | `worker.apiKeyEnv` | string | `"GEMINI_API_KEY"` | no |
 | `CMR_WORKER_TIMEOUT_MS` | `worker.timeoutMs` | int | `180000` | no |
 | `CMR_WORKER_MAX_RETRIES` | `worker.maxRetries` | int | `2` | no |
@@ -33,7 +33,7 @@ option. This is how CI pins behaviour and how the kill switches work. What each 
 | `CMR_CODE_WRITE_WORKER_API_KEY_ENV` | `workers.codeWrite.apiKeyEnv` | string | `null` | no |
 | `CMR_CODE_WRITE_WORKER_TIMEOUT_MS` | `workers.codeWrite.timeoutMs` | int | `null` | no |
 | `CMR_GEMINI_BASE_URL` | `providers.gemini.baseUrl` | string | `"https://generativelanguage.googleapis.com/v1beta"` | no |
-| `CMR_GEMINI_MODEL` | `providers.gemini.model` | string | `"gemini-2.5-flash"` | no |
+| `CMR_GEMINI_MODEL` | `providers.gemini.model` | string | `"gemini-3.8-flash"` | no |
 | `CMR_OLLAMA_BASE_URL` | `providers.ollama.baseUrl` | string | `"http://127.0.0.1:11434"` | no |
 | `CMR_OLLAMA_MODEL` | `providers.ollama.model` | string | `"qwen2.5-coder:7b"` | no |
 | `CMR_OLLAMA_CONTEXT_TOKENS` | `providers.ollama.contextTokens` | int | `null` | no |

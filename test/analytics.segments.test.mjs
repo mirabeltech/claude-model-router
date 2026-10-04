@@ -45,12 +45,12 @@ test('each dimension names the column it grouped by', () => {
 
 test('grouping by provider, model, mode, task type and status all work from one pass', () => {
   const r = run([
-    dispatchedRow({ provider: 'gemini', model: 'gemini-2.5-flash' }),
+    dispatchedRow({ provider: 'gemini', model: 'gemini-3.8-flash' }),
     dispatchedRow({ provider: 'ollama', model: 'llama3.1:8b' }),
     gateRow(),
   ])
   assert.deepEqual(keys(r.segments.provider).sort(), ['__null__', 'gemini', 'ollama'])
-  assert.deepEqual(keys(r.segments.model).sort(), ['__null__', 'gemini-2.5-flash', 'llama3.1:8b'])
+  assert.deepEqual(keys(r.segments.model).sort(), ['__null__', 'gemini-3.8-flash', 'llama3.1:8b'])
   assert.deepEqual(keys(r.segments.taskType).sort(), ['bulk_read', 'gate_block'])
   assert.deepEqual(keys(r.segments.status).sort(), ['ok', 'skipped'])
 })

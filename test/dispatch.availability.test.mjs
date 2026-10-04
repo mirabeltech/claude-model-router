@@ -52,7 +52,7 @@ test('the unavailability message names the variable that is missing, not a gener
 
 test('the same provider with its key present executes', async () => {
   const r = await run(
-    laneConfig({ bulkRead: { provider: 'gemini', model: 'gemini-2.5-flash' } }),
+    laneConfig({ bulkRead: { provider: 'gemini', model: 'gemini-3.8-flash' } }),
     { GEMINI_API_KEY: GEMINI_KEY },
   )
   assert.equal(r.status, 'ok')
@@ -93,7 +93,7 @@ test('switching one lane to a keyless provider does not make it demand the globa
 })
 
 test('an explicit per-lane key variable is the one readiness checks', async () => {
-  const config = laneConfig({ bulkRead: { provider: 'gemini', model: 'gemini-2.5-flash', apiKeyEnv: 'BULK_KEY' } })
+  const config = laneConfig({ bulkRead: { provider: 'gemini', model: 'gemini-3.8-flash', apiKeyEnv: 'BULK_KEY' } })
   const missing = await run(config, { GEMINI_API_KEY: GEMINI_KEY })
   assert.equal(missing.reason, 'provider_unavailable')
   assert.match(missing.error.message, /BULK_KEY/)
@@ -145,7 +145,7 @@ test('an unknown provider is refused before readiness, so it never reports a mis
 test('every registered provider id resolves and dispatches through the same path', async () => {
   // No provider-specific branch exists in the dispatcher: adding one to the registry is enough.
   const env = { GEMINI_API_KEY: GEMINI_KEY, MOCK_WORKER_URL: server.url }
-  const models = { gemini: 'gemini-2.5-flash', ollama: 'qwen2.5-coder:7b', mock: 'mock-1' }
+  const models = { gemini: 'gemini-3.8-flash', ollama: 'qwen2.5-coder:7b', mock: 'mock-1' }
   for (const id of providerIds()) {
     const r = await run(laneConfig({ bulkRead: { provider: id, model: models[id] } }), env)
     assert.equal(r.status, 'ok', `${id} did not dispatch: ${r.reason} ${r.error?.message}`)

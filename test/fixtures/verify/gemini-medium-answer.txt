@@ -1,0 +1,74 @@
+### Purpose
+As documented in lines 1–6 of `medium.ts`, this file is a synthetic TypeScript module used as a delegation corpus. It was generated via `test/fixtures/corpus/README.md` instructions specifically to exceed size thresholds (`routing.bulkRead.minBytes` of 12000 bytes and `minLines` of 350 lines) so that a gate delegates it.
+
+---
+
+### Structure
+The file consists of:
+1. A base `Entity` interface.
+2. Seventeen repetitive blocks (numbered 1 through 17), each containing an interface extending `Entity` and an associated normalization function.
+3. An orphaned JSDoc comment for a domain record number 18 at line 401 with no declaration following it.
+
+---
+
+### Declarations
+
+#### Base Interface
+* **Line 8**: 
+  ```ts
+  export interface Entity { id: string; createdAt: Date; updatedAt: Date }
+  ```
+
+#### Domain Record Interfaces
+Each `RecordN` interface extends `Entity` with identical fields:
+```ts
+name: string
+slug: string
+ordinal: number
+enabled: boolean
+metadata: Record<string, string | number | null>
+```
+* **Line 11**: `export interface Record1 extends Entity`
+* **Line 34**: `export interface Record2 extends Entity`
+* **Line 57**: `export interface Record3 extends Entity`
+* **Line 80**: `export interface Record4 extends Entity`
+* **Line 103**: `export interface Record5 extends Entity`
+* **Line 126**: `export interface Record6 extends Entity`
+* **Line 149**: `export interface Record7 extends Entity`
+* **Line 172**: `export interface Record8 extends Entity`
+* **Line 195**: `export interface Record9 extends Entity`
+* **Line 218**: `export interface Record10 extends Entity`
+* **Line 241**: `export interface Record11 extends Entity`
+* **Line 264**: `export interface Record12 extends Entity`
+* **Line 287**: `export interface Record13 extends Entity`
+* **Line 310**: `export interface Record14 extends Entity`
+* **Line 333**: `export interface Record15 extends Entity`
+* **Line 356**: `export interface Record16 extends Entity`
+* **Line 379**: `export interface Record17 extends Entity`
+
+#### Normalization Functions
+Each `normalizeRecordN` function accepts `input: Partial<RecordN>` and returns `RecordN`. If `!input.id`, it throws `new TypeError("RecordN requires an id")`. It assigns default fallback values: `createdAt` and `updatedAt` default to `new Date(0)`, `name` to `''`, `slug` to `(input.slug ?? '').toLowerCase()`, `ordinal` to integer value or `0`, `enabled` to `input.enabled === true`, and `metadata` to `{}`.
+* **Line 19**: `export function normalizeRecord1(input: Partial<Record1>): Record1`
+* **Line 42**: `export function normalizeRecord2(input: Partial<Record2>): Record2`
+* **Line 65**: `export function normalizeRecord3(input: Partial<Record3>): Record3`
+* **Line 88**: `export function normalizeRecord4(input: Partial<Record4>): Record4`
+* **Line 111**: `export function normalizeRecord5(input: Partial<Record5>): Record5`
+* **Line 134**: `export function normalizeRecord6(input: Partial<Record6>): Record6`
+* **Line 157**: `export function normalizeRecord7(input: Partial<Record7>): Record7`
+* **Line 180**: `export function normalizeRecord8(input: Partial<Record8>): Record8`
+* **Line 203**: `export function normalizeRecord9(input: Partial<Record9>): Record9`
+* **Line 226**: `export function normalizeRecord10(input: Partial<Record10>): Record10`
+* **Line 249**: `export function normalizeRecord11(input: Partial<Record11>): Record11`
+* **Line 272**: `export function normalizeRecord12(input: Partial<Record12>): Record12`
+* **Line 295**: `export function normalizeRecord13(input: Partial<Record13>): Record13`
+* **Line 318**: `export function normalizeRecord14(input: Partial<Record14>): Record14`
+* **Line 341**: `export function normalizeRecord15(input: Partial<Record15>): Record15`
+* **Line 364**: `export function normalizeRecord16(input: Partial<Record16>): Record16`
+* **Line 387**: `export function normalizeRecord17(input: Partial<Record17>): Record17`
+
+---
+
+### What the File Does Not Do
+* **No `Record18` implementation**: Although line 401 contains `/** Domain record number 18, with the audit fields every table in this schema carries. */`, no `Record18` interface or `normalizeRecord18` function is declared.
+* **No variation across schemas**: Despite distinct names (`Record1` through `Record17`), none of the interfaces have unique schemas or specialized normalization logic; all fields and validation routines are clones of `Record1`.
+* **No I/O or database access**: The file contains no persistence, network, or external runtime logic; it only handles in-memory object mapping and validation.

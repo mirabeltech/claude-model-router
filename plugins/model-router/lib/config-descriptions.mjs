@@ -48,7 +48,7 @@ export const DESCRIPTIONS = Object.freeze({
   'workers.codeWrite.model': 'Model for the code-writer mode. null inherits worker.model when the provider is also inherited, otherwise providers.<id>.model.',
   'workers.codeWrite.apiKeyEnv': 'API key variable for the code-writer mode. null inherits worker.apiKeyEnv only when the provider is also inherited.',
   'workers.codeWrite.timeoutMs': 'Timeout for the code-writer mode. null inherits worker.timeoutMs; a millisecond budget carries no provider identity, so it always inherits.',
-  'providers.gemini.model': 'Model used when a lane names the gemini provider without inheriting worker.model. gemini-2.5-flash is the middle of the three the bundled pricing table knows.',
+  'providers.gemini.model': 'Model used when a lane names the gemini provider without inheriting worker.model. gemini-3.8-flash is Google own named successor to the retired gemini-2.5-flash, and the middle tier of the three the bundled pricing table knows.',
   'workers.bulkRead.ladder': 'Escalation order for bulk reads: provider ids tried in turn when the previous answer fails verification. Empty means no escalation, which is the shipped behaviour. Claude itself is always the implicit last tier, because an exhausted ladder falls open to the developer own Read.',
   'workers.codeWrite.ladder': 'Escalation order for the code-write lane. That lane is unreachable today, so this is declared and inert.',
   'verify.enabled': 'Check the worker answer against the file it summarised before that answer replaces the file in Claude context. Deterministic: line references, quoted literals and backticked identifiers are verified against the bytes.',

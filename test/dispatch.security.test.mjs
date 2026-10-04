@@ -82,7 +82,7 @@ test('a key present in the environment never appears anywhere in a result', asyn
   const r = await dispatch({
     decision: delegatingDecision(),
     config: serverConfig(`${server.url}/s/auth_401`, {
-      workers: { bulkRead: { provider: 'gemini', model: 'gemini-2.5-flash' } },
+      workers: { bulkRead: { provider: 'gemini', model: 'gemini-3.8-flash' } },
     }),
     input: bulkReadPayload(),
     env: { GEMINI_API_KEY: GEMINI_SECRET },

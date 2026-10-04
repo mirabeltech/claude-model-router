@@ -328,7 +328,7 @@ test('emitEvent writes one line and never throws, even on a hostile input', () =
     const res = emitEvent(
       {
         providerId: 'gemini',
-        result: { text: 'summary', usage: usage(), model: 'gemini-2.5-flash', providerLatencyMs: 10, truncated: false, finishReason: 'STOP' },
+        result: { text: 'summary', usage: usage(), model: 'gemini-3.8-flash', providerLatencyMs: 10, truncated: false, finishReason: 'STOP' },
         capabilities: caps(),
         attempts: 1,
         filesCount: 2,

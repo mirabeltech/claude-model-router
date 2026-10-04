@@ -36,7 +36,7 @@ import { DEFAULTS } from '../plugins/model-router/lib/config.mjs'
 const PROVIDERS = [
   {
     id: 'gemini',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.8-flash',
     env: { GEMINI_API_KEY: 'AIzaTESTKEYTESTKEYTESTKEY' },
     providerConfig: (base) => ({ baseUrl: base }),
     // Gemini's own path identifies the shape; the scenario rides a path prefix.

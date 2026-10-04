@@ -336,7 +336,7 @@ local tag is any string the developer pulled or built — so an allowlist would 
 model nobody enumerated. Instead, a model is incoherent when **another registered provider
 claims its naming shape**:
 
-- `provider=ollama, model=gemini-2.5-flash` → Gemini claims it → **mismatch**
+- `provider=ollama, model=gemini-3.8-flash` → Gemini claims it → **mismatch**
 - `provider=ollama, model=llama3:latest` → nobody else claims it → **coherent**
 - model missing after inheritance → **unresolved**, a distinct third state
 

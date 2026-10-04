@@ -152,7 +152,7 @@ test('a provider filter narrows the window and is echoed back', () => {
   const r = runCli(base(['--provider', 'ollama']))
   assert.equal(r.status, 0)
   assert.match(r.out, /filters\s+provider=ollama/)
-  assert.equal(r.out.includes('gemini-2.5-flash'), false, 'a filtered-out model must not appear')
+  assert.equal(r.out.includes('gemini-3.8-flash'), false, 'a filtered-out model must not appear')
 })
 
 test('a model filter narrows to that model', () => {

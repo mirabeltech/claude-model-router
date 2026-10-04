@@ -43,7 +43,7 @@ ollama list                       # confirm it is there
 ```
 
 **Set both `provider` and `model`.** Setting only the provider leaves the model at its default of
-`gemini-2.5-flash`, which Ollama does not own, and doctor reports a provider/model mismatch as a
+`gemini-3.8-flash`, which Ollama does not own, and doctor reports a provider/model mismatch as a
 FAIL. This is the single most common misconfiguration of this plugin.
 
 `baseUrl` defaults to loopback. Point it elsewhere for a daemon on another host — note that this
@@ -135,7 +135,7 @@ detects that shape by name, because it otherwise looks exactly like a bad key.
 {
   "worker": {
     "provider": "gemini",
-    "model": "gemini-2.5-flash",
+    "model": "gemini-3.8-flash",
     "apiKeyEnv": "GEMINI_API_KEY"
   }
 }
@@ -198,7 +198,7 @@ Worker provider
   WARN  provider readiness: NOT ready   gemini: GEMINI_API_KEY not set
 
 Worker capability
-  WARN  bulk-reader: gemini/gemini-2.5-flash: context capability unknown
+  WARN  bulk-reader: gemini/gemini-3.8-flash: context capability unknown
         no context limit is discoverable for gemini — that is a missing capability, not a fault
 ```
 

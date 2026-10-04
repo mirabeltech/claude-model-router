@@ -40,7 +40,7 @@ const row = (o = {}) => ({
   calc_version: 1,
   pricing_version: 'test.1',
   provider: 'gemini',
-  model: 'gemini-2.5-flash',
+  model: 'gemini-3.8-flash',
   project_id: 'p1',
   task_type: 'bulk_read',
   worker_input_tokens: 600,
@@ -245,8 +245,8 @@ test('grouped aggregation produces one coverage-bearing total per group', () => 
 })
 
 test('grouping by model and project works off the stored fields', () => {
-  const rows = [row(), row({ model: 'gemini-2.5-pro', project_id: 'p2' })]
-  assert.deepEqual([...groupBy(rows, byModel).keys()], ['gemini-2.5-flash', 'gemini-2.5-pro'])
+  const rows = [row(), row({ model: 'gemini-3.1-pro-preview', project_id: 'p2' })]
+  assert.deepEqual([...groupBy(rows, byModel).keys()], ['gemini-3.8-flash', 'gemini-3.1-pro-preview'])
   assert.equal(aggregateGrouped(rows, (r) => r.project_id, extractors.workerTokens).size, 2)
 })
 

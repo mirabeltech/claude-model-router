@@ -35,7 +35,7 @@
         "model": {
           "type": "string",
           "minLength": 1,
-          "default": "gemini-2.5-flash",
+          "default": "gemini-3.8-flash",
           "description": "Worker model id as the provider names it. Env override: CMR_WORKER_MODEL."
         },
         "apiKeyEnv": {
@@ -206,8 +206,8 @@
             "model": {
               "type": "string",
               "minLength": 1,
-              "default": "gemini-2.5-flash",
-              "description": "Model used when a lane names the gemini provider without inheriting worker.model. gemini-2.5-flash is the middle of the three the bundled pricing table knows. Env override: CMR_GEMINI_MODEL."
+              "default": "gemini-3.8-flash",
+              "description": "Model used when a lane names the gemini provider without inheriting worker.model. gemini-3.8-flash is Google own named successor to the retired gemini-2.5-flash, and the middle tier of the three the bundled pricing table knows. Env override: CMR_GEMINI_MODEL."
             }
           }
         },

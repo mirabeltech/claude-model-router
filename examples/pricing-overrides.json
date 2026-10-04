@@ -24,7 +24,7 @@
   "currency": "USD",
 
   "models": {
-    "gemini:gemini-2.5-flash": {
+    "gemini:gemini-3.8-flash": {
       "inputPerMTok": null,
       "cachedInputPerMTok": null,
       "outputPerMTok": null,
