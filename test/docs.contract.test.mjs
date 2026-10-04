@@ -30,6 +30,7 @@ import { fileURLToPath } from 'node:url'
 
 import { SPEC } from '../plugins/model-router/lib/config.mjs'
 import { declaredEnvNames } from '../plugins/model-router/lib/env-registry.mjs'
+import { TESTED_CLAUDE_CODE_VERSION } from './helpers/versions.mjs'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const PKG = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8'))
@@ -371,5 +372,51 @@ test('the platform claim matches what CI actually runs', () => {
     /behaviour is identical on/i.test(readme),
     false,
     'that claim was never evidenced; say what CI gates instead',
+  )
+})
+
+/* --------------------------------------------- the host version, in one place */
+
+test('every mention of the tested Claude Code version agrees with the declared one', () => {
+  // The hook contract is read out of a specific binary, so it is only true of a version — and that
+  // version was named in six files with nothing keeping them in step. Bumping five and missing one
+  // would have failed nothing, leaving a document claiming verification the tests disagreed with.
+  //
+  // Both directions: every file that names A version names THE declared one, and the declared one
+  // is actually named somewhere, so the constant cannot drift away from the documents either.
+  const expected = TESTED_CLAUDE_CODE_VERSION
+  const pattern = /Claude Code[^\n]{0,40}?(\d+\.\d+\.\d+)|(\d+\.\d+\.\d+)[^\n]{0,30}?\(Claude Code\)/g
+  const sites = []
+  const disagreements = []
+
+  const walk = (dir, out = []) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (SKIP_DIRS.has(e.name)) continue
+      const abs = path.join(dir, e.name)
+      if (e.isDirectory()) walk(abs, out)
+      else if (e.name.endsWith('.md') || e.name.endsWith('.mjs')) out.push(abs)
+    }
+    return out
+  }
+
+  for (const abs of walk(REPO_ROOT)) {
+    const relPath = rel(abs)
+    // The declaration itself is the source of truth, so it is not evidence about itself.
+    if (relPath === 'test/helpers/versions.mjs') continue
+    const source = fs.readFileSync(abs, 'utf8')
+    for (const m of source.matchAll(pattern)) {
+      const found = m[1] ?? m[2]
+      if (!found) continue
+      sites.push(`${relPath}: ${found}`)
+      if (found !== expected) {
+        disagreements.push(`${relPath} names Claude Code ${found}, not ${expected}`)
+      }
+    }
+  }
+
+  assert.deepEqual(disagreements, [])
+  assert.ok(
+    sites.length >= 4,
+    `only ${sites.length} mentions found; the scan has stopped matching (${sites.join(', ')})`,
   )
 })

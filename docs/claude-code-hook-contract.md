@@ -8,12 +8,23 @@ loaded, reported as registered, and never executed.
 | | |
 |---|---|
 | Verified against | **Claude Code 2.1.177** (`claude --version`) |
+| First verified | 2026-10-04 |
+| Re-verified | 2026-10-04 — same version installed, so nothing to reconcile |
 | Binary | `@anthropic-ai/claude-code/bin/claude.exe`, a native build |
 | Platform | Windows 11, Node 24.16.0 |
 | Method | string extraction from the binary's own zod schemas and runner, plus live `claude -p` sessions with `--debug-file` |
 
 > **Re-verify this on a version bump.** None of it is a stable public API. The hook-level tests
 > encode the parts that would fail silently, which is the only defence that survives an upgrade.
+
+The version above is declared once, in `test/helpers/versions.mjs` as
+`TESTED_CLAUDE_CODE_VERSION`, and `test/docs.contract.test.mjs` asserts that every file naming a
+Claude Code version names that one. It is named in six places; before that assertion existed,
+bumping five of them and missing the sixth would have failed nothing, leaving a document claiming
+verification the tests disagreed with. The constant is deliberately not read from `claude --version`
+at test time: the CLI is not guaranteed to be installed, and the question is not what is installed
+here but what this contract was actually checked against — a fact about a past verification, which
+only a human re-verifying should change.
 
 ## How to re-derive it
 

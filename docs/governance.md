@@ -368,15 +368,34 @@ reading a growing JSONL file on the hot path to answer a question that fits in 4
 
 ## 11. Performance
 
-Measured on the development machine with `process.hrtime.bigint()`, 2000 iterations after warmup.
+Reproducible: `node --test test/governance.latency.test.mjs` prints every row below through
+`t.diagnostic()`. That harness was added in phase 12, because until then this was the only measured
+claim in the repository with no code behind it — every other quoted number traced to
+`hook.latency.test.mjs`, `analytics.performance.test.mjs` or the eval runner's `timings.json`.
 
-| operation | median | p95 |
-| --- | --- | --- |
-| `hasConfiguredLimit` (all null — the shipped state) | 0.0005 ms | 0.0013 ms |
-| `evaluateBudget` (nothing configured) | 0.0015 ms | 0.0021 ms |
-| `evaluateBudget` (a daily token limit) | 0.0021 ms | 0.0034 ms |
-| **`checkBudget` — default install, short-circuit, no I/O** | **0.0008 ms** | **0.0019 ms** |
-| `checkBudget` + `finalizeBudget` — configured, full ledger round trip | 4.05 ms | 6.79 ms |
+Both columns use `process.hrtime.bigint()`, 2000 iterations after 200 warmup iterations, except the
+configured round trip (200 iterations against a real directory, because what is being measured is
+the filesystem's cost and 2000 real lock cycles buy no extra information).
+
+| operation | phase 9 median | phase 12 median | phase 12 p95 |
+| --- | --- | --- | --- |
+| `hasConfiguredLimit` (all null — the shipped state) | 0.0005 ms | 0.0013 ms | 0.0046 ms |
+| `evaluateBudget` (nothing configured) | 0.0015 ms | 0.0014 ms | 0.0047 ms |
+| `evaluateBudget` (a daily token limit) | 0.0021 ms | 0.0019 ms | 0.0041 ms |
+| **`checkBudget` — default install, short-circuit, no I/O** | **0.0008 ms** | **0.0015 ms** | 0.0033 ms |
+| `checkBudget` + `finalizeBudget` — configured, full ledger round trip | 4.05 ms | 3.17 ms | 4.84 ms |
+
+**These are machine-dependent and the two columns are not a regression.** Both were taken on the
+development machine, phase 9 on Node 22 and phase 12 on Node 24.16.0, and nothing between them
+changed a line of `governance/`. Two rows are about twice their earlier median and the round trip is
+a fifth faster — which is the normal spread of sub-microsecond timings on a desktop, and the reason
+the harness asserts generous ceilings rather than these values. A test that failed when a number
+moved by 2x would be deleted within a month.
+
+What the harness does assert tightly is the claim that matters, and it asserts it by **counting
+syscalls rather than watching a clock**: on a default install `checkBudget()` is driven with an `fs`
+whose every method throws, and it must still return `allow` / `budget_not_configured`. A short
+circuit that stopped working fails that loudly, where a timing would only fail slowly.
 
 **The short-circuit is the load-bearing line.** With every limit `null`, `checkBudget()` returns on
 a pure object walk before the ledger is ever opened: no directory created, no file written, no lock
