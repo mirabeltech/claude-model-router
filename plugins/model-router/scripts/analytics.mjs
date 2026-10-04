@@ -207,10 +207,21 @@ export async function runAnalytics({
 
 if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('analytics.mjs')) {
   runAnalytics().then(
-    (code) => process.exit(code),
+    // `process.exitCode`, NEVER `process.exit()`.
+    //
+    // MEASURED: `process.exit()` here truncated `--json` at about 146 KB on Linux and macOS while
+    // working perfectly on Windows. On POSIX a write to a pipe is asynchronous, so exiting
+    // discards whatever is still buffered; on Windows it is synchronous, which is why every
+    // developer run and every manual check looked fine. A full analytics response is roughly
+    // 200 KB, so the shipped `--json` was emitting invalid JSON on two of three platforms.
+    //
+    // Setting the code and letting the event loop drain is the only correct form here.
+    (code) => {
+      process.exitCode = code
+    },
     (err) => {
       process.stderr.write(`${RED}analytics failed: ${err?.message ?? err}${OFF}\n`)
-      process.exit(2)
+      process.exitCode = 2
     },
   )
 }

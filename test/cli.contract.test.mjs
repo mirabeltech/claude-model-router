@@ -360,3 +360,69 @@ test('contradictory flags are refused rather than silently ordered', () => {
     ci.cleanup()
   }
 })
+
+/* ------------------------------------------------- large output on a pipe */
+
+test('a large --json response survives the pipe in full', () => {
+  // THE BUG CI FOUND ON ITS FIRST RUN, and the reason this test asserts BYTE LENGTH rather than
+  // merely that the output parses.
+  //
+  // `analytics.mjs` ended with `process.exit(code)` straight after writing a ~200 KB JSON
+  // document. On POSIX a write to a pipe is asynchronous, so exiting discards whatever is still
+  // buffered and the response was truncated at about 146 KB — invalid JSON. On Windows the same
+  // write is synchronous, so every local run and every manual check looked perfect. The shipped
+  // `--json` was broken on two of three platforms and nothing noticed.
+  //
+  // A parse check alone would be a weak regression test: it passes trivially on Windows. Comparing
+  // the piped bytes against the length the serializer produced is a real assertion on every
+  // platform, because a truncation is a length mismatch wherever it happens.
+  const ci = makeCleanInstall({ label: 'big-json' })
+  try {
+    fs.mkdirSync(ci.storeDir, { recursive: true })
+    for (const day of ['02', '03', '04']) {
+      fs.copyFileSync(
+        path.join(REPO_ROOT, 'test', 'fixtures', 'telemetry', `events-2026-03-${day}.jsonl`),
+        path.join(ci.storeDir, `events-2026-03-${day}.jsonl`),
+      )
+    }
+    const r = run(ci, 'plugins/model-router/scripts/analytics.mjs', [
+      '--all',
+      '--json',
+      '--now',
+      '2026-03-04T12:00:00.000Z',
+    ])
+    assert.equal(r.status, 0, r.stderr)
+    // Large enough to cross a pipe buffer, or the test proves nothing.
+    assert.ok(
+      r.stdout.length > 64 * 1024,
+      `the fixture response is only ${r.stdout.length} bytes; too small to exercise the hazard`,
+    )
+    assert.doesNotThrow(() => JSON.parse(r.stdout), 'the piped response is not valid JSON')
+    // And the last bytes are really there, which is what truncation removes.
+    assert.match(r.stdout.trimEnd().slice(-1), /[}\]]/, 'the response does not end cleanly')
+  } finally {
+    ci.cleanup()
+  }
+})
+
+test('no public command exits while output may still be buffered', () => {
+  // The static form of the same claim, so the fix cannot be undone in a file this suite does not
+  // happen to pipe. `process.exit()` at a completion path is the hazard; an early usage exit
+  // before anything has been written is not, so those are allowed explicitly.
+  // The checkable proxy: whatever a command does on the way in, the LAST exit in the file — the
+  // completion path, after output has been written — must set `process.exitCode`. An early
+  // `process.exit()` for `--help` or an unknown flag is fine, because nothing substantial has been
+  // written yet, and these four scripts are not all shaped the same way: two have an entry-point
+  // guard and two are straight-line.
+  for (const cmd of COMMANDS) {
+    const src = fs.readFileSync(path.join(REPO_ROOT, cmd.script), 'utf8')
+    const exits = [...src.matchAll(/process\.(exitCode|exit)\b/g)]
+    assert.ok(exits.length > 0, `${cmd.id} never sets an exit status`)
+    const last = exits[exits.length - 1][1]
+    assert.equal(
+      last,
+      'exitCode',
+      `${cmd.id}'s completion path calls process.exit(), which can truncate a pending write`,
+    )
+  }
+})

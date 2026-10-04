@@ -971,8 +971,12 @@ if (wantJson) {
       2,
     ),
   )
-  process.exit(exitCode)
-}
+  // process.exitCode, never process.exit(): on POSIX a write to a pipe is asynchronous, so
+  // exiting here would discard whatever of this document is still buffered. MEASURED in
+  // analytics.mjs, which truncated a 200 KB --json response at about 146 KB on Linux and macOS
+  // while working perfectly on Windows, because a Windows pipe write is synchronous.
+  process.exitCode = exitCode
+} else {
 
 const PAINT = { pass: C.green, warn: C.yellow, fail: C.red, info: C.dim }
 console.log(`router doctor ${C.dim}${ROUTER_VERSION}${C.off}`)
@@ -1004,4 +1008,5 @@ if (counts.fail > 0) {
 } else {
   console.log(`${C.green}All checks passed.${C.off}`)
 }
-process.exit(exitCode)
+process.exitCode = exitCode
+}

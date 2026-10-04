@@ -71,18 +71,29 @@ const YELLOW = C.yellow
 const DIM = C.dim
 const OFF = C.off
 
-const { config } = loadConfig()
-const budget = config.budget
-const now = Date.now()
-const periods = periodKeys(now)
+/**
+ * The report body.
+ *
+ * A function rather than a straight-line script because the early exits below are CONTROL FLOW,
+ * and `process.exit()` at a completion path can truncate a pending write: on POSIX a write to a
+ * pipe is asynchronous, so exiting discards whatever is still buffered. MEASURED in analytics.mjs,
+ * which truncated a 200 KB --json response at about 146 KB on Linux and macOS while working
+ * perfectly on Windows, where the same write is synchronous. This command's output is small, but
+ * the pattern is wrong regardless of today's payload size.
+ */
+function main() {
+  const { config } = loadConfig()
+  const budget = config.budget
+  const now = Date.now()
+  const periods = periodKeys(now)
 
-console.log(`\nrouter budget  ${DIM}${periods.day} (UTC)${OFF}`)
-console.log('='.repeat(68))
+  console.log(`\nrouter budget  ${DIM}${periods.day} (UTC)${OFF}`)
+  console.log('='.repeat(68))
 
-if (budget?.enabled !== true) {
-  console.log(`\n${YELLOW}Governance is disabled.${OFF}  ${DIM}budget.enabled is false${OFF}`)
-  console.log(`${DIM}No limit is evaluated and no accounting state is read or written.${OFF}\n`)
-  process.exit(0)
+  if (budget?.enabled !== true) {
+    console.log(`\n${YELLOW}Governance is disabled.${OFF}  ${DIM}budget.enabled is false${OFF}`)
+    console.log(`${DIM}No limit is evaluated and no accounting state is read or written.${OFF}\n`)
+    return 0
 }
 
 if (!hasConfiguredLimit(budget)) {
@@ -97,7 +108,7 @@ if (!hasConfiguredLimit(budget)) {
   console.log(`${DIM}  { "budget": { "run": { "maxTotalTokens": 200000 } } }${OFF}`)
   console.log(`${DIM}A TOKEN budget binds wherever the provider reports usage. A DOLLAR budget${OFF}`)
   console.log(`${DIM}additionally needs pricing.overrides — see npm run doctor.${OFF}\n`)
-  process.exit(0)
+  return 0
 }
 
 /* ------------------------------------------------------------------ limits */
@@ -137,7 +148,7 @@ if (!state.ok) {
   console.log(`  ${YELLOW}spend is UNKNOWN${OFF}  ${DIM}${state.reason}${OFF}`)
   console.log(`  ${DIM}Unknown is not zero. The router fails open, so delegation continues;${OFF}`)
   console.log(`  ${DIM}npm run doctor reports this as an error when a limit is configured.${OFF}\n`)
-  process.exit(0)
+  return 0
 }
 
 /** Headroom under a limit, or null when either side is unknown — never the limit itself. */
@@ -189,4 +200,7 @@ console.log(
   `\n${DIM}Periods are UTC and roll over by key, so there is nothing scheduled at midnight.${OFF}`,
 )
 console.log(`${DIM}State: ${budget.stateDirResolved ?? budget.stateDir}${OFF}\n`)
-process.exit(0)
+return 0
+}
+
+process.exitCode = main()

@@ -263,9 +263,13 @@ function defaultReadStdin() {
 
 if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('report.mjs')) {
   try {
-    process.exit(runReport())
+    // `process.exitCode`, never `process.exit()`: on POSIX a write to a pipe is asynchronous, so
+    // exiting discards whatever is still buffered. This command's stdout is only a path, but the
+    // same call in analytics.mjs was truncating a 200 KB JSON response on Linux and macOS while
+    // looking perfect on Windows — so the pattern is wrong regardless of today's payload size.
+    process.exitCode = runReport()
   } catch (err) {
     process.stderr.write(`${RED}report failed: ${err?.message ?? err}${OFF}\n`)
-    process.exit(2)
+    process.exitCode = 2
   }
 }
