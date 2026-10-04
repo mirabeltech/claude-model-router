@@ -297,6 +297,10 @@ test('CLAUDE_ROUTER_TELEMETRY is read in exactly one place', () => {
       const full = path.join(dir, entry.name)
       if (entry.isDirectory()) walk(full)
       else if (entry.name.endsWith('.mjs')) {
+        // The env registry DECLARES this variable — that is its whole job — and a declaration is
+        // not a reader. It names the variable in code rather than in a comment, so the
+        // comment-stripping below cannot tell them apart and it has to be excluded by name.
+        if (entry.name === 'env-registry.mjs') continue
         // Comments are stripped first, so a code READ is counted but a MENTION is not:
         // config.mjs documents the switch in a docstring, which is exactly where the
         // explanation belongs and is not a second reader.
