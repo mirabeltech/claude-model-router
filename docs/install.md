@@ -124,6 +124,25 @@ they must still run `claude plugin install` once themselves. Treat the committed
 the marketplace **known**, and tell your team to run the install line. Trusting and installing
 third-party code is a decision a developer should make deliberately in any case.
 
+## What was actually verified, and when
+
+A test can check that a documented command exists and that a link resolves. It cannot check that
+instructions are followable. So this was done by hand, once, against a scratch home directory that
+had never seen the plugin:
+
+> **Verified on:** Windows 11, Node 24.16.0, Claude Code 2.1.177 — 2026-10-04
+>
+> `claude plugin marketplace add mirabeltech/claude-model-router` → clone and validate →
+> `claude plugin install model-router@claude-model-router` and `router-dashboard@...` → both
+> installed at user scope → `claude plugin details` reported 1 `PreToolUse` hook, 2 commands and
+> ~52 always-on tokens → the installed diagnostic exited **0** with 19 PASS, 6 WARN, 0 FAIL on a
+> keyless install, correctly reported `install mode marketplace`, and **created no files or
+> directories**.
+
+Two things that verification is *not*: it did not configure a worker or run a real delegation
+through the installed plugin, and it was a single platform. Linux and macOS are gated by CI for the
+test suite but the install flow itself has not been walked through by hand on either.
+
 ## Secrets, for a team
 
 Keys go in each developer's **environment**, never in a committed file. There is no config field
