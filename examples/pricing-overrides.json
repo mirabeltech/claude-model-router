@@ -1,0 +1,46 @@
+{
+  // ---------------------------------------------------------------------------
+  // A PRICING TABLE. This is NOT a router config: it is the file that
+  // `pricing.overrides` points at.
+  //
+  //   1. copy it to <project>/.claude/model-router-pricing.json
+  //   2. set the rates from the provider's own page, which `verify` links
+  //   3. in your model-router.json:
+  //        "pricing": { "source": "file", "overrides": "./.claude/model-router-pricing.json" }
+  //
+  // WHY THIS IS NOT SHIPPED FILLED IN. Every rate in the bundled table is null,
+  // because a confident wrong dollar figure is worse than a refusal to price,
+  // and published rates change without notice. Until a rate exists, worker cost
+  // is reported as NULL — never 0, and never a guess. `npm run doctor` prints a
+  // ready-to-paste skeleton for exactly the models your install needs.
+  //
+  // Tables are never merged. The first table in the chain that names a model
+  // wins outright, so a partial override file is fine: models it omits simply
+  // fall through to the next table.
+  // ---------------------------------------------------------------------------
+
+  "pricingVersion": "my-rates.1",
+  "unit": "per_mtok",
+  "currency": "USD",
+
+  "models": {
+    "gemini:gemini-2.5-flash": {
+      "inputPerMTok": null,
+      "cachedInputPerMTok": null,
+      "outputPerMTok": null,
+      "verify": "https://ai.google.dev/pricing",
+      "verifiedAt": "2026-01-01"
+    },
+
+    // A local model costs no API money. A literal 0 is a REAL MEASUREMENT and
+    // renders differently from an unpriced call, so set it to 0 only if you
+    // genuinely do not account for the hardware.
+    "ollama:*": {
+      "inputPerMTok": 0,
+      "cachedInputPerMTok": 0,
+      "outputPerMTok": 0,
+      "verify": "local inference — no API charge",
+      "verifiedAt": "2026-01-01"
+    }
+  }
+}

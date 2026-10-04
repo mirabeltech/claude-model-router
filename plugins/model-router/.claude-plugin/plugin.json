@@ -6,5 +6,37 @@
   "author": { "name": "Mirabel Technologies" },
   "repository": "https://github.com/mirabeltech/claude-model-router",
   "license": "Apache-2.0",
-  "keywords": ["model-routing", "token-optimization", "delegation", "telemetry", "cost"]
+  "keywords": ["model-routing", "token-optimization", "delegation", "telemetry", "cost"],
+  "userConfig": {
+    "worker_provider": {
+      "type": "string",
+      "title": "Worker provider",
+      "description": "Which cheap model runs the delegated work. ollama needs no API key and runs locally; gemini needs GEMINI_API_KEY in your environment. Leaving this alone keeps the shipped default, which is gemini.",
+      "default": "gemini"
+    },
+    "worker_model": {
+      "type": "string",
+      "title": "Worker model",
+      "description": "The model id to send. It must be one the provider above actually owns: pairing ollama with a gemini model name is the single most common misconfiguration, and npm run doctor reports it as a mismatch.",
+      "default": "gemini-2.5-flash"
+    },
+    "routing_bulkread_enforce": {
+      "type": "string",
+      "title": "Bulk-read gate",
+      "description": "What happens when a large read is delegated. deny hands Claude the worker's answer instead of the file; ask prompts; suggest only advises; off disables the gate. Every setting still fails open if the worker is unavailable.",
+      "default": "deny"
+    },
+    "hooks_taskintent_source": {
+      "type": "string",
+      "title": "Task intent",
+      "description": "none sends the worker a fixed generic task, so nothing from your session leaves the machine. transcript lets the hook recover your newest prompt and ask the worker that instead: a better question, and one that sends your prompt text to the worker model. Redacted and length-clamped either way.",
+      "default": "none"
+    },
+    "telemetry_enabled": {
+      "type": "boolean",
+      "title": "Record telemetry",
+      "description": "Write one local JSONL row per delegation so npm run analytics and the HTML report have something to read. Nothing is ever sent anywhere; paths are hashed by default.",
+      "default": true
+    }
+  }
 }

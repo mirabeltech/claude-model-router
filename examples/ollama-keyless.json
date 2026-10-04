@@ -1,0 +1,46 @@
+{
+  "$schema": "https://raw.githubusercontent.com/mirabeltech/claude-model-router/main/plugins/model-router/lib/config.schema.json",
+
+  // ---------------------------------------------------------------------------
+  // A KEYLESS, FULLY LOCAL WORKER. Nothing leaves the machine and no API key is
+  // involved at all. Copy to <project>/.claude/model-router.json, or to your
+  // personal ~/.claude/model-router/config.json if you do not want to commit it.
+  //
+  // Prerequisites: Ollama running, and the model pulled. See docs/providers.md.
+  //   ollama serve
+  //   ollama pull qwen2.5-coder:7b
+  // ---------------------------------------------------------------------------
+
+  "worker": {
+    // SET BOTH. Setting only the provider leaves `model` at its default of
+    // gemini-2.5-flash, which Ollama does not own, and `npm run doctor` reports
+    // a provider/model mismatch as a FAILURE. It is the single most common way
+    // to misconfigure this plugin.
+    "provider": "ollama",
+    "model": "qwen2.5-coder:7b"
+  },
+
+  "providers": {
+    "ollama": {
+      "baseUrl": "http://127.0.0.1:11434",
+
+      // Leave null to let the daemon be asked (POST /api/show) on every doctor
+      // run and every dispatch, cached for the process lifetime. Set a number
+      // only to impose a SMALLER application limit than the model's real
+      // window: a configured value is clamped by a discovered one, and it stays
+      // labelled "configured" because an operator's assertion clamped by a
+      // measurement is still an assertion.
+      "contextTokens": null,
+      "discoverContext": true
+    }
+  },
+
+  // Ollama bills nothing, so cost is a structural zero rather than an unknown.
+  // A TOKEN budget still works and is still worth setting as a runaway guard.
+  "budget": {
+    "enabled": true,
+    "run": {
+      // "maxTotalTokens": 200000
+    }
+  }
+}

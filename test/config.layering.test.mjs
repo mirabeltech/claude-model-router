@@ -311,12 +311,6 @@ test('$schema is accepted without being flagged as a typo', () => {
   assert.equal(warnings.length, 0, JSON.stringify(warnings))
 })
 
-test('the shipped example project config loads without warnings', async () => {
-  const fs = await import('node:fs')
-  const { stripJsonComments: strip } = await import('../plugins/model-router/lib/config.mjs')
-  const data = JSON.parse(strip(fs.readFileSync('examples/model-router.project.json', 'utf8')))
-  const { config, warnings } = resolveConfig({ layers: [{ name: 'project', data }] })
-  assert.equal(warnings.length, 0, JSON.stringify(warnings))
-  assert.equal(config.routing.denyGlobs.includes('**/migrations/**'), true)
-  assert.equal(config.telemetry.countProvenFilesOnly, true)
-})
+// The shipped examples used to be checked here, for the one file that existed. They now live in
+// test/examples.test.mjs, which censuses the whole directory so a new example cannot ship
+// unvalidated, and resolves paths from import.meta.url rather than the working directory.

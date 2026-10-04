@@ -1,0 +1,62 @@
+{
+  "$schema": "https://raw.githubusercontent.com/mirabeltech/claude-model-router/main/plugins/model-router/lib/config.schema.json",
+
+  // ---------------------------------------------------------------------------
+  // WHAT GETS RECORDED, AND HOW MUCH OF IT. Copy to
+  // <project>/.claude/model-router.json.
+  //
+  // Telemetry is LOCAL ONLY. There is no remote sink, no account and no network
+  // call anywhere in the write path. These settings control what is written to
+  // a file on your own disk, which matters because that file is what you would
+  // be sharing if you sent somebody a report.
+  // ---------------------------------------------------------------------------
+
+  "telemetry": {
+    "enabled": true,
+    "dir": "~/.claude/model-router/telemetry",
+
+    // The privacy ladder, least to most revealing:
+    //   hashed   (default) file paths are salted hashes. You can count and group
+    //            by file without the row naming it.
+    //   labeled  coarse labels instead of hashes.
+    //   verbose  paths as they were read.
+    "privacyLevel": "hashed",
+
+    // Each of these is OFF by default and each adds one specific thing to a row.
+    // Turn one on only if you want it in a shared report.
+    "storeProjectLabel": false,
+    "storeFilePaths": false,
+    "storeGitBranch": false,
+    "storeQuestionText": false,
+    "questionTextMaxChars": 200,
+    "storeErrorDetail": false,
+    "storeContentHash": false,
+
+    // Savings are counted ONLY over files a hook actually blocked. Setting this
+    // false counts files the gate merely considered, which inflates the figure
+    // with reads that were going to happen anyway.
+    "countProvenFilesOnly": true,
+
+    // chars/4 UNDER-counts code, which tokenizes nearer 3.0-3.6 chars/token, so
+    // the avoided figure is conservative on purpose.
+    "avoidedMethod": "chars_div_4",
+
+    // Residency is 0 unless you have actually measured it. It multiplies the
+    // avoided figure by how many turns the content would have stayed in
+    // context, and guessing it is the easiest way to overstate savings by an
+    // order of magnitude.
+    "residencyTurns": 0,
+    "residencySource": "default_zero",
+
+    // A segment per UTC day. "none" writes one undated file and makes retention
+    // a COMPLETE NO-OP, because pruning selects by the date in the filename —
+    // retentionDays then has no effect at all. Doctor warns about that pairing.
+    "rotation": "daily",
+    "retentionDays": 90,
+
+    // One record is one writeSync of one buffer, which is what makes concurrent
+    // appends safe on a local disk. On a network or cloud-synced volume that
+    // guarantee does not hold: shard per process instead.
+    "shardByPid": false
+  }
+}

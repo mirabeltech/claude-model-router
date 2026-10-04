@@ -14,7 +14,8 @@
     "version": {
       "type": "integer",
       "minimum": 1,
-      "default": 1
+      "default": 1,
+      "description": "Config schema version of this file. Bumped only when a setting changes meaning; a mismatch is reported, never silently migrated."
     },
     "enabled": {
       "type": "boolean",
@@ -48,35 +49,35 @@
           "minimum": 1000,
           "maximum": 1800000,
           "default": 180000,
-          "description": "Env override: CMR_WORKER_TIMEOUT_MS."
+          "description": "How long one worker call may take. A ceiling for a script, deliberately generous: the HOOK deadline is the tighter of the two and is what actually bounds a delegated read. A value above the HTTP client ceiling is reported, because the call would be abandoned there instead. Env override: CMR_WORKER_TIMEOUT_MS."
         },
         "maxRetries": {
           "type": "integer",
           "minimum": 0,
           "maximum": 10,
           "default": 2,
-          "description": "Env override: CMR_WORKER_MAX_RETRIES."
+          "description": "Retries after a failed worker call. A retry is only attempted for a failure that could plausibly succeed again; a refusal is never retried. Env override: CMR_WORKER_MAX_RETRIES."
         },
         "maxInputBytes": {
           "type": "integer",
           "minimum": 1024,
           "maximum": 50000000,
           "default": 2000000,
-          "description": "Env override: CMR_WORKER_MAX_INPUT_BYTES."
+          "description": "TRANSPORT ceiling in BYTES for one request body. This is not a context window and no context arithmetic may read it: a provider can accept two megabytes of body and still refuse a prompt that does not fit its window. Env override: CMR_WORKER_MAX_INPUT_BYTES."
         },
         "temperature": {
           "type": "number",
           "minimum": 0,
           "maximum": 2,
           "default": 0.2,
-          "description": "Env override: CMR_WORKER_TEMPERATURE."
+          "description": "Sampling temperature for the worker. Low by default: these are extraction and boilerplate tasks, where a confident consistent answer beats a creative one. Env override: CMR_WORKER_TEMPERATURE."
         },
         "maxOutputTokens": {
           "type": "integer",
           "minimum": 1,
           "maximum": 1000000,
           "default": 8192,
-          "description": "Env override: CMR_WORKER_MAX_OUTPUT_TOKENS."
+          "description": "Upper bound on the worker answer. Capped automatically when the context window is known and the full request would not fit, because making room for the answer is preferable to refusing the call. Env override: CMR_WORKER_MAX_OUTPUT_TOKENS."
         }
       }
     },
@@ -184,7 +185,7 @@
               "type": "string",
               "minLength": 1,
               "default": "https://generativelanguage.googleapis.com/v1beta",
-              "description": "Env override: CMR_GEMINI_BASE_URL."
+              "description": "Gemini API base URL. Override to reach a proxy or a regional endpoint. Env override: CMR_GEMINI_BASE_URL."
             }
           }
         },
@@ -196,13 +197,13 @@
               "type": "string",
               "minLength": 1,
               "default": "http://127.0.0.1:11434",
-              "description": "Env override: CMR_OLLAMA_BASE_URL."
+              "description": "Ollama daemon URL. The default is loopback, so nothing leaves the machine. Env override: CMR_OLLAMA_BASE_URL."
             },
             "model": {
               "type": "string",
               "minLength": 1,
               "default": "qwen2.5-coder:7b",
-              "description": "Env override: CMR_OLLAMA_MODEL."
+              "description": "Default Ollama model, used when a lane names the provider but no model of its own. Env override: CMR_OLLAMA_MODEL."
             },
             "contextTokens": {
               "type": [
@@ -234,7 +235,7 @@
             "enabled": {
               "type": "boolean",
               "default": true,
-              "description": "Env override: CMR_BULK_READ_ENABLED."
+              "description": "Whether the bulk-read gate is consulted at all. Disabling it is narrower than disabling routing entirely. Env override: CMR_BULK_READ_ENABLED."
             },
             "enforce": {
               "type": "string",
@@ -283,7 +284,7 @@
               "minimum": 1,
               "maximum": 1000,
               "default": 25,
-              "description": "Env override: CMR_MAX_FILES."
+              "description": "Above this many files in one read, the gate declines to delegate: a request that broad is usually exploration, where Claude reading directly is the better answer. Env override: CMR_MAX_FILES."
             }
           }
         },
@@ -294,7 +295,7 @@
             "enabled": {
               "type": "boolean",
               "default": true,
-              "description": "Env override: CMR_CODE_WRITE_ENABLED."
+              "description": "Whether the code-write lane is consulted. Advisory today — no interception ships for it. Env override: CMR_CODE_WRITE_ENABLED."
             },
             "enforce": {
               "type": "string",
@@ -333,7 +334,7 @@
             "type": "string"
           },
           "default": [],
-          "description": "Env override: CMR_ALLOW_GLOBS."
+          "description": "Paths that may be delegated even when another rule would decline. Narrow this deliberately: it is the only setting that can override a refusal, and it cannot override the deny list. Env override: CMR_ALLOW_GLOBS."
         },
         "neverDelegate": {
           "type": "object",
@@ -542,7 +543,7 @@
         "enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Env override: CMR_TELEMETRY_ENABLED."
+          "description": "Whether a row is written per delegation. Disabling it leaves routing untouched and makes analytics and the report empty. Env override: CMR_TELEMETRY_ENABLED."
         },
         "sink": {
           "type": "string",
@@ -552,7 +553,7 @@
             "null"
           ],
           "default": "jsonl",
-          "description": "Env override: CMR_TELEMETRY_SINK."
+          "description": "Where rows go. jsonl is the shipped store; null discards them. A sink that is not implemented falls back and reports the fallback rather than failing a hook. Env override: CMR_TELEMETRY_SINK."
         },
         "dir": {
           "type": "string",
@@ -567,7 +568,7 @@
             "none"
           ],
           "default": "daily",
-          "description": "Env override: CMR_TELEMETRY_ROTATION."
+          "description": "daily writes one dated segment per UTC day. none writes a single undated file and makes retention a COMPLETE NO-OP, because pruning selects by the date in the filename. Env override: CMR_TELEMETRY_ROTATION."
         },
         "shardByPid": {
           "type": "boolean",
@@ -579,7 +580,7 @@
           "minimum": 1,
           "maximum": 36500,
           "default": 90,
-          "description": "Env override: CMR_TELEMETRY_RETENTION_DAYS."
+          "description": "How long a segment is kept by npm run prune. It has no effect at all when rotation is none, since an undated segment can never be selected. Env override: CMR_TELEMETRY_RETENTION_DAYS."
         },
         "primaryModel": {
           "type": [
@@ -653,17 +654,17 @@
         "storeProjectLabel": {
           "type": "boolean",
           "default": false,
-          "description": "Env override: CMR_STORE_PROJECT_LABEL."
+          "description": "Store a readable project label beside the hashed id. Off by default: a hashed id is enough to group by. Env override: CMR_STORE_PROJECT_LABEL."
         },
         "storeFilePaths": {
           "type": "boolean",
           "default": false,
-          "description": "Env override: CMR_STORE_FILE_PATHS."
+          "description": "Store file paths as they were read, instead of salted hashes. Off by default. This is the single largest increase in what a shared report reveals. Env override: CMR_STORE_FILE_PATHS."
         },
         "storeGitBranch": {
           "type": "boolean",
           "default": false,
-          "description": "Env override: CMR_STORE_GIT_BRANCH."
+          "description": "Store the git branch on each row. Off by default: a branch name often carries a ticket id or a customer name. Env override: CMR_STORE_GIT_BRANCH."
         },
         "storeQuestionText": {
           "type": "boolean",
@@ -675,17 +676,17 @@
           "minimum": 0,
           "maximum": 10000,
           "default": 200,
-          "description": "Env override: CMR_QUESTION_TEXT_MAX_CHARS."
+          "description": "Clamp on stored question text. Only consulted when storeQuestionText is on. Env override: CMR_QUESTION_TEXT_MAX_CHARS."
         },
         "storeErrorDetail": {
           "type": "boolean",
           "default": false,
-          "description": "Env override: CMR_STORE_ERROR_DETAIL."
+          "description": "Store provider error bodies verbatim. Off by default, because an error body can echo the request. Env override: CMR_STORE_ERROR_DETAIL."
         },
         "storeContentHash": {
           "type": "boolean",
           "default": false,
-          "description": "Env override: CMR_STORE_CONTENT_HASH."
+          "description": "Store a hash of the delegated content, so repeat reads of the same bytes can be recognised. A hash, never the content. Env override: CMR_STORE_CONTENT_HASH."
         },
         "recordGateDecisions": {
           "type": "boolean",
@@ -705,7 +706,7 @@
             "file"
           ],
           "default": "bundled",
-          "description": "Env override: CMR_PRICING_SOURCE."
+          "description": "Which pricing table to use. bundled ships every rate as null, so cost is reported as NULL rather than guessed; file reads the table named by pricing.overrides. Env override: CMR_PRICING_SOURCE."
         },
         "overrides": {
           "type": [

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://raw.githubusercontent.com/mirabeltech/claude-model-router/main/plugins/model-router/lib/config.schema.json",
+
+  // ---------------------------------------------------------------------------
+  // A DIFFERENT WORKER PER LANE: bulk reading locally for free, boilerplate
+  // generation on a hosted model. Copy to <project>/.claude/model-router.json.
+  //
+  // Lane settings INHERIT ASYMMETRICALLY. A lane that names a provider but no
+  // model does NOT inherit the global model, and a lane that names neither
+  // inherits both from `worker`. The trap: `worker.apiKeyEnv` is inherited
+  // whenever the provider is, so a lane running Ollama still shows
+  // GEMINI_API_KEY as its key name — harmless, because a provider that wants no
+  // key is never asked for one, and `npm run doctor` reports "none required".
+  // ---------------------------------------------------------------------------
+
+  "worker": {
+    // The fallback for any lane that names nothing of its own.
+    "provider": "ollama",
+    "model": "qwen2.5-coder:7b"
+  },
+
+  "workers": {
+    "bulkRead": {
+      // Inherits the local worker above. Bulk reading is the high-volume lane,
+      // so running it locally is where a keyless setup pays off most.
+      "provider": null,
+      "model": null
+    },
+    "codeWrite": {
+      // Boilerplate is lower volume and more sensitive to quality.
+      "provider": "gemini",
+      "model": "gemini-2.5-flash",
+      "apiKeyEnv": "GEMINI_API_KEY",
+      "timeoutMs": 120000
+    }
+  },
+
+  "providers": {
+    "ollama": { "baseUrl": "http://127.0.0.1:11434" }
+  }
+}

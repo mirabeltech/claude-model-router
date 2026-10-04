@@ -267,3 +267,36 @@ test('the budget object rejects an unknown property in the schema', () => {
     assert.equal(schema.properties.budget.properties[scope].additionalProperties, false, scope)
   }
 })
+
+test('a per-direction daily ceiling is an unknown field, dropped with a warning', () => {
+  // THE SPEC/POLICY ASYMMETRY, pinned rather than "fixed". `policy.mjs` iterates four limit leaves
+  // across all three scopes, but SPEC declares maxInputTokens and maxOutputTokens for `run` only.
+  // So `budget.daily.maxInputTokens` looks plausible, would be read by the policy walker, and is
+  // rejected by config validation.
+  //
+  // Deliberately left that way. Declaring eight more leaves is scope the limit does not earn — a
+  // per-direction ceiling across a whole UTC day has no actionable remedy when you hit it — and
+  // narrowing the policy loop would make a module that imports NOTHING depend on SPEC, which is
+  // the property that lets config.mjs read the coherence rules without pulling a provider onto
+  // the hot path.
+  //
+  // What matters is that the value never reaches the policy silently. It does not: it is dropped
+  // before `config.budget` is assembled, so describeGovernance() never sees it.
+  const r = resolveConfig({
+    layers: [{ name: 'project', data: { budget: { daily: { maxInputTokens: 1000 } } } }],
+    env: {},
+  })
+
+  const unknown = r.warnings.filter((w) => w.reason === 'unknown field, ignored')
+  assert.equal(unknown.length, 1, 'exactly one warning, naming the leaf')
+  assert.equal(unknown[0].field, 'budget.daily.maxInputTokens')
+  assert.equal(r.config.budget.daily.maxInputTokens, undefined, 'and it is absent from the result')
+
+  // The control: the same leaf under `run` is a real setting and resolves.
+  const ok = resolveConfig({
+    layers: [{ name: 'project', data: { budget: { run: { maxInputTokens: 1000 } } } }],
+    env: {},
+  })
+  assert.deepEqual(ok.warnings, [])
+  assert.equal(ok.config.budget.run.maxInputTokens, 1000)
+})

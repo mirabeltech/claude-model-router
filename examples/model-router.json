@@ -1,0 +1,82 @@
+{
+  "$schema": "https://raw.githubusercontent.com/mirabeltech/claude-model-router/main/plugins/model-router/lib/config.schema.json",
+
+  // ---------------------------------------------------------------------------
+  // COPY THIS TO:  <your-project>/.claude/model-router.json
+  //
+  // That exact path is the only project config the loader reads. There is no
+  // upward directory walk and no other filename, so a file named anything else
+  // is silently ignored. Commit it: it is the team-shared layer, overriding each
+  // developer's personal ~/.claude/model-router/config.json and itself overridden
+  // by CMR_* environment variables so CI can always win.
+  //
+  // THIS FILE HOLDS CONFIGURATION, NEVER A SECRET. There is no field to put an
+  // API key in. A key is named by the environment variable that holds it
+  // (worker.apiKeyEnv) and read from the environment at call time. No config
+  // value is ever interpolated, so "${GEMINI_API_KEY}" would be read as that
+  // literal 19-character string.
+  // ---------------------------------------------------------------------------
+
+  "worker": {
+    "provider": "gemini",
+    "model": "gemini-2.5-flash"
+  },
+
+  "routing": {
+    "bulkRead": {
+      // The gate only considers a read this large. Lower it and you delegate
+      // more marginal reads; raise it and you delegate fewer, bigger ones.
+      "minLines": 350
+    },
+
+    // CAUTION: ARRAYS REPLACE, THEY DO NOT MERGE. This list is the whole deny
+    // list, not an addition to the built-in one, so it repeats all nine shipped
+    // defaults and then adds migrations. If you delete a line here you are
+    // turning that protection off for everyone who uses this file.
+    "denyGlobs": [
+      "**/.env*",
+      "**/*secret*",
+      "**/*credential*",
+      "**/*.pem",
+      "**/*.key",
+      "**/id_rsa*",
+      "**/.git/**",
+      "**/auth/**",
+      "**/security/**",
+      "**/migrations/**"
+    ]
+  },
+
+  "hooks": {
+    "taskIntent": {
+      // "none" (the default) sends the worker a fixed generic task, so nothing
+      // from your session leaves the machine. "transcript" lets the hook recover
+      // your newest prompt and ask the worker THAT instead — a much better
+      // question, and one that sends your prompt text to the worker model.
+      // Left at the default deliberately: a committed team config should not
+      // make that choice on everyone's behalf. Clamped by maxChars and passed
+      // through secret redaction either way.
+      "source": "none",
+      "maxChars": 600
+    }
+  },
+
+  // Every limit ships null, meaning "no configured limit" — which is NOT 0, a
+  // deliberately configured zero budget. Uncomment one to make it bind, and see
+  // examples/governance.json for what each one can and cannot enforce.
+  "budget": {
+    "enabled": true,
+    "run": {
+      // "maxTotalTokens": 200000
+    },
+    "onExceed": "disable"
+  },
+
+  "telemetry": {
+    "enabled": true,
+    // Conservative defaults: hashed paths, no prompt text stored, and savings
+    // counted only over files a hook actually blocked.
+    "privacyLevel": "hashed",
+    "countProvenFilesOnly": true
+  }
+}

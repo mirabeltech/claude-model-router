@@ -1,0 +1,46 @@
+{
+  "$schema": "https://raw.githubusercontent.com/mirabeltech/claude-model-router/main/plugins/model-router/lib/config.schema.json",
+
+  // ---------------------------------------------------------------------------
+  // A METERED HOSTED WORKER. Copy to <project>/.claude/model-router.json.
+  //
+  // THE KEY IS NOT IN THIS FILE AND CANNOT BE. `apiKeyEnv` names the environment
+  // variable that holds it; the value is read from the environment at call time.
+  //
+  //   Windows    setx GEMINI_API_KEY "your-key"     then restart Claude Code
+  //              (setx writes the user environment but NOT the current shell)
+  //   macOS/Linux  export GEMINI_API_KEY=your-key   and add it to your profile
+  //
+  // No config value is interpolated, so "${GEMINI_API_KEY}" here would be taken
+  // as that literal string. `npm run doctor` detects that mistake by name.
+  // ---------------------------------------------------------------------------
+
+  "worker": {
+    "provider": "gemini",
+    "model": "gemini-2.5-flash",
+
+    // Point this at a different variable to keep several keys side by side, or
+    // to use a name your CI already sets.
+    "apiKeyEnv": "GEMINI_API_KEY",
+
+    // A ceiling for a script, deliberately generous. The HOOK deadline is the
+    // tighter of the two and is what actually bounds a delegated read.
+    "timeoutMs": 180000,
+    "maxOutputTokens": 8192
+  },
+
+  // Gemini does NOT expose a context-window probe, so capability status stays
+  // "unknown" or "assumed" and doctor WARNS about it. That is correct and not a
+  // bug: an unknown window is never treated as an unlimited one, and dispatch
+  // falls back to the provider's byte ceiling.
+
+  // Worker cost is NULL until rates exist: every rate in the bundled pricing
+  // table ships null, because a confident wrong dollar figure is worse than a
+  // refusal to price. A MONETARY budget therefore has nothing to accumulate
+  // against until you point this at a table — see examples/pricing-overrides.json.
+  "pricing": {
+    "source": "bundled"
+    // "source": "file",
+    // "overrides": "./.claude/model-router-pricing.json"
+  }
+}

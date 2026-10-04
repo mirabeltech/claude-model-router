@@ -1,0 +1,66 @@
+{
+  "$schema": "https://raw.githubusercontent.com/mirabeltech/claude-model-router/main/plugins/model-router/lib/config.schema.json",
+
+  // ---------------------------------------------------------------------------
+  // BUDGETS. Copy to <project>/.claude/model-router.json.
+  //
+  // Everything here ships null and enforces NOTHING until you set a number.
+  // null means "no configured limit"; 0 means "a deliberately configured zero
+  // budget" and denies every delegation. They are not the same value and the
+  // code never conflates them.
+  //
+  // Governance is a SEPARATE decision from routing. The gate first answers
+  // "would this be appropriate to delegate", and only then is the budget asked
+  // "are we allowed to right now". Neither can rewrite the other's answer.
+  //
+  // Nothing here can fail your request. At a reached limit, "disable" declines
+  // the delegation and the read continues on plain Claude Code; "warn"
+  // delegates anyway and records the breach.
+  // ---------------------------------------------------------------------------
+
+  "budget": {
+    "enabled": true,
+
+    "run": {
+      // THE SAFEST FIRST LIMIT: a per-delegation runaway guard. It needs no
+      // persisted state, so it works on a fresh install with no ledger at all.
+      "maxTotalTokens": 200000
+
+      // `run` is the only scope that takes direction-specific ceilings.
+      // "maxInputTokens": 150000,
+      // "maxOutputTokens": 50000,
+      // "maxWorkerCostUsd": 0.50
+    },
+
+    "daily": {
+      // daily and monthly take a total-token ceiling and a cost ceiling ONLY.
+      // There is deliberately no daily maxInputTokens: a per-direction ceiling
+      // across a whole day has no actionable remedy when you hit it.
+      // "maxTotalTokens": 5000000,
+      // "maxWorkerCostUsd": 5.0
+    },
+
+    "monthly": {
+      // "maxWorkerCostUsd": 50.0
+    },
+
+    // A TOKEN budget works immediately wherever the provider reports usage.
+    // A MONETARY budget needs rates, and every bundled rate is null, so until
+    // you configure pricing.overrides a dollar limit has nothing to accumulate
+    // against. `npm run doctor` says so rather than letting it look enforced.
+    "onExceed": "disable",
+
+    // What to do when the thing being measured is unknown rather than large.
+    // "allow" is the shipped default and the fail-open choice; "deny" is the
+    // conservative one, and is the right setting if you would rather not
+    // delegate at all than delegate something you cannot account for.
+    "onUnknownCost": "allow",
+    "onUnknownUsage": "allow",
+
+    // Keep this LOCAL. The ledger takes an exclusive-create lock, and O_EXCL is
+    // not reliably atomic on SMB, NFS or OneDrive, so cross-machine enforcement
+    // over a shared directory does not hold. Doctor cannot detect that and does
+    // not claim to.
+    "stateDir": "~/.claude/model-router/governance"
+  }
+}
