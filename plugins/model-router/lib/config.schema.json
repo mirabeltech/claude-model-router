@@ -1,0 +1,721 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/mirabeltech/claude-model-router/main/plugins/model-router/lib/config.schema.json",
+  "title": "claude-model-router configuration",
+  "description": "Layered configuration for the model-router plugin. Resolution order, later wins: bundled defaults, ~/.claude/model-router/config.json, <project>/.claude/model-router.json, CMR_* environment variables, CLAUDE_PLUGIN_OPTION_*. An invalid field falls back to its default with a warning rather than failing a hook.",
+  "type": "object",
+  "additionalProperties": false,
+  "x-configVersion": 1,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Path or URL to this schema, for editor autocomplete."
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1
+    },
+    "enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Master switch for routing. Disable to make the gate allow every read. Env override: CMR_ENABLED."
+    },
+    "worker": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "default": "gemini",
+          "description": "Worker provider id, resolved through lib/providers/index.mjs. Env override: CMR_WORKER_PROVIDER."
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "default": "gemini-2.5-flash",
+          "description": "Worker model id as the provider names it. Env override: CMR_WORKER_MODEL."
+        },
+        "apiKeyEnv": {
+          "type": "string",
+          "minLength": 1,
+          "default": "GEMINI_API_KEY",
+          "description": "Name of the environment variable holding the worker API key. The key itself is never stored in config. Env override: CMR_WORKER_API_KEY_ENV."
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 1800000,
+          "default": 180000,
+          "description": "Env override: CMR_WORKER_TIMEOUT_MS."
+        },
+        "maxRetries": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10,
+          "default": 2,
+          "description": "Env override: CMR_WORKER_MAX_RETRIES."
+        },
+        "maxInputBytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 50000000,
+          "default": 2000000,
+          "description": "Env override: CMR_WORKER_MAX_INPUT_BYTES."
+        },
+        "temperature": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2,
+          "default": 0.2,
+          "description": "Env override: CMR_WORKER_TEMPERATURE."
+        },
+        "maxOutputTokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000,
+          "default": 8192,
+          "description": "Env override: CMR_WORKER_MAX_OUTPUT_TOKENS."
+        }
+      }
+    },
+    "workers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bulkRead": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "provider": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "default": null,
+              "description": "Provider for the bulk-reader mode. null inherits worker.provider. Setting it also stops model and apiKeyEnv being inherited, because neither means anything across a provider change. Env override: CMR_BULK_READ_WORKER_PROVIDER."
+            },
+            "model": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "default": null,
+              "description": "Model for the bulk-reader mode. null inherits worker.model when the provider is also inherited, otherwise providers.<id>.model. Env override: CMR_BULK_READ_WORKER_MODEL."
+            },
+            "apiKeyEnv": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "default": null,
+              "description": "API key variable for the bulk-reader mode. null inherits worker.apiKeyEnv only when the provider is also inherited. Env override: CMR_BULK_READ_WORKER_API_KEY_ENV."
+            },
+            "timeoutMs": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1000,
+              "maximum": 1800000,
+              "default": null,
+              "description": "Timeout for the bulk-reader mode. null inherits worker.timeoutMs; a millisecond budget carries no provider identity, so it always inherits. Env override: CMR_BULK_READ_WORKER_TIMEOUT_MS."
+            }
+          }
+        },
+        "codeWrite": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "provider": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "default": null,
+              "description": "Provider for the code-writer mode. null inherits worker.provider. Setting it also stops model and apiKeyEnv being inherited, because neither means anything across a provider change. Env override: CMR_CODE_WRITE_WORKER_PROVIDER."
+            },
+            "model": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "default": null,
+              "description": "Model for the code-writer mode. null inherits worker.model when the provider is also inherited, otherwise providers.<id>.model. Env override: CMR_CODE_WRITE_WORKER_MODEL."
+            },
+            "apiKeyEnv": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "default": null,
+              "description": "API key variable for the code-writer mode. null inherits worker.apiKeyEnv only when the provider is also inherited. Env override: CMR_CODE_WRITE_WORKER_API_KEY_ENV."
+            },
+            "timeoutMs": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1000,
+              "maximum": 1800000,
+              "default": null,
+              "description": "Timeout for the code-writer mode. null inherits worker.timeoutMs; a millisecond budget carries no provider identity, so it always inherits. Env override: CMR_CODE_WRITE_WORKER_TIMEOUT_MS."
+            }
+          }
+        }
+      }
+    },
+    "providers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gemini": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "baseUrl": {
+              "type": "string",
+              "minLength": 1,
+              "default": "https://generativelanguage.googleapis.com/v1beta",
+              "description": "Env override: CMR_GEMINI_BASE_URL."
+            }
+          }
+        },
+        "ollama": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "baseUrl": {
+              "type": "string",
+              "minLength": 1,
+              "default": "http://127.0.0.1:11434",
+              "description": "Env override: CMR_OLLAMA_BASE_URL."
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1,
+              "default": "qwen2.5-coder:7b",
+              "description": "Env override: CMR_OLLAMA_MODEL."
+            },
+            "contextTokens": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 256,
+              "maximum": 10000000,
+              "default": null,
+              "description": "Context window of the Ollama model, in tokens. null means unknown, and unknown is never treated as infinite: the window is discovered from the daemon, then looked up in the bundled table, and a request that still cannot be shown to fit is refused rather than silently truncated. Set this to override both. Env override: CMR_OLLAMA_CONTEXT_TOKENS."
+            },
+            "discoverContext": {
+              "type": "boolean",
+              "default": true,
+              "description": "Ask the Ollama daemon for the model context window via /api/show. One cached localhost call per model per process, made after the routing gate has already approved delegation. Disable to rely on providers.ollama.contextTokens and the bundled table alone. Env override: CMR_OLLAMA_DISCOVER_CONTEXT."
+            }
+          }
+        }
+      }
+    },
+    "routing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bulkRead": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Env override: CMR_BULK_READ_ENABLED."
+            },
+            "enforce": {
+              "type": "string",
+              "enum": [
+                "deny",
+                "ask",
+                "suggest",
+                "off"
+              ],
+              "default": "deny",
+              "description": "deny blocks the read and steers to the skill; ask prompts; suggest only advises; off disables the gate. Env override: CMR_BULK_READ_ENFORCE."
+            },
+            "minLines": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000,
+              "default": 350,
+              "description": "Line count above which a full-file read is gated. Env override: CMR_MIN_LINES."
+            },
+            "minBytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000000,
+              "default": 12000,
+              "description": "Byte size gate, checked before line counting so the hook stays fast. Env override: CMR_MIN_BYTES."
+            },
+            "minEstimatedTokens": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1,
+              "maximum": 100000000,
+              "default": null,
+              "description": "Third size proxy, OR'd with minLines and minBytes. null disables it; it never satisfies while unset. Env override: CMR_MIN_ESTIMATED_TOKENS."
+            },
+            "minFiles": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 1,
+              "description": "Minimum file count for a bulk-read question. 1 is a no-op; raising it only narrows delegation. Env override: CMR_MIN_FILES."
+            },
+            "maxFiles": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 25,
+              "description": "Env override: CMR_MAX_FILES."
+            }
+          }
+        },
+        "codeWrite": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Env override: CMR_CODE_WRITE_ENABLED."
+            },
+            "enforce": {
+              "type": "string",
+              "enum": [
+                "deny",
+                "ask",
+                "suggest",
+                "off"
+              ],
+              "default": "suggest",
+              "description": "Advisory by design: a hook cannot know a Write is boilerplate before it exists. Env override: CMR_CODE_WRITE_ENFORCE."
+            }
+          }
+        },
+        "denyGlobs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/.env*",
+            "**/*secret*",
+            "**/*credential*",
+            "**/*.pem",
+            "**/*.key",
+            "**/id_rsa*",
+            "**/.git/**",
+            "**/auth/**",
+            "**/security/**"
+          ],
+          "description": "Paths that are never delegated. Security-critical content must not leave for a third-party worker. Env override: CMR_DENY_GLOBS."
+        },
+        "allowGlobs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Env override: CMR_ALLOW_GLOBS."
+        },
+        "neverDelegate": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "onTargetedRead": {
+              "type": "boolean",
+              "default": true,
+              "description": "Treat an offset/limit read as intentional and never delegate it. Env override: CMR_NEVER_ON_TARGETED_READ."
+            },
+            "onRecentlyEdited": {
+              "type": "boolean",
+              "default": true,
+              "description": "Never delegate a file edited this session; Claude needs exact bytes. Env override: CMR_NEVER_ON_RECENTLY_EDITED."
+            }
+          }
+        }
+      }
+    },
+    "hooks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the PreToolUse hook intercepts Read at all. false leaves routing, telemetry and the scripts intact and stops only the interception. Env override: CMR_HOOKS_ENABLED."
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 120000,
+          "default": 20000,
+          "description": "The hook's own deadline for a delegated read, which is not the worker's. Past it the hook abandons the worker call and falls open to the original Read, so an interactive read is never blocked for longer than this. Env override: CMR_HOOK_TIMEOUT_MS."
+        },
+        "taskIntent": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "source": {
+              "type": "string",
+              "enum": [
+                "none",
+                "transcript"
+              ],
+              "default": "none",
+              "description": "Where the worker's task comes from. 'none' sends a fixed generic task and is the default. 'transcript' recovers the newest prompt from the session transcript the hook is already given, so the worker is told what is actually being looked for — which also means your prompt text is sent to the worker model. Opt in deliberately. Env override: CMR_TASK_INTENT_SOURCE."
+            },
+            "maxChars": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4000,
+              "default": 600,
+              "description": "Ceiling on how much recovered prompt text may be sent to the worker. Longer intent is truncated, never dropped. Env override: CMR_TASK_INTENT_MAX_CHARS."
+            }
+          }
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Master switch for budget governance. Off, no limit is evaluated and no accounting state is read or written. Env override: CMR_BUDGET_ENABLED."
+        },
+        "run": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "maxWorkerCostUsd": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1000000,
+              "default": null,
+              "description": "Ceiling on the worker cost of one delegation. null means no configured limit; 0 means a configured zero budget. Unenforceable while the model is unpriced, because an unknown cost is not a zero cost. Env override: CMR_RUN_BUDGET_USD."
+            },
+            "maxInputTokens": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1000000000,
+              "default": null,
+              "description": "Ceiling on worker INPUT tokens for one delegation. Governance asks whether this is allowed; the context model separately asks whether it fits. Env override: CMR_RUN_MAX_INPUT_TOKENS."
+            },
+            "maxOutputTokens": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1000000000,
+              "default": null,
+              "description": "Ceiling on worker OUTPUT tokens for one delegation. Env override: CMR_RUN_MAX_OUTPUT_TOKENS."
+            },
+            "maxTotalTokens": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1000000000,
+              "default": null,
+              "description": "Ceiling on total worker tokens for one delegation. The narrowest runaway guard, since a per-run limit needs no persisted state. Env override: CMR_RUN_MAX_TOTAL_TOKENS."
+            }
+          }
+        },
+        "daily": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "maxWorkerCostUsd": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1000000,
+              "default": null,
+              "description": "Ceiling on worker cost per UTC day. null means no configured limit. Env override: CMR_DAILY_BUDGET_USD."
+            },
+            "maxTotalTokens": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1000000000000,
+              "default": null,
+              "description": "Ceiling on total worker tokens per UTC day. Env override: CMR_DAILY_MAX_TOTAL_TOKENS."
+            }
+          }
+        },
+        "monthly": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "maxWorkerCostUsd": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1000000,
+              "default": null,
+              "description": "Ceiling on worker cost per UTC month. null means no configured limit. Env override: CMR_MONTHLY_BUDGET_USD."
+            },
+            "maxTotalTokens": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1000000000000,
+              "default": null,
+              "description": "Ceiling on total worker tokens per UTC month. Env override: CMR_MONTHLY_MAX_TOTAL_TOKENS."
+            }
+          }
+        },
+        "onExceed": {
+          "type": "string",
+          "enum": [
+            "disable",
+            "warn"
+          ],
+          "default": "disable",
+          "description": "What a reached limit does. disable denies delegation and the request continues on plain Claude Code; warn records the breach and delegates anyway. Neither fails the request. Env override: CMR_BUDGET_ON_EXCEED."
+        },
+        "onUnknownCost": {
+          "type": "string",
+          "enum": [
+            "allow",
+            "deny"
+          ],
+          "default": "allow",
+          "description": "What to do when a monetary budget is configured but the worker cost is unknown. allow records the fact and proceeds, keeping an unpriced provider usable; deny is the opt-in for an exactly enforced ceiling. A structurally free local provider is not \"unknown\" and is unaffected. Env override: CMR_BUDGET_ON_UNKNOWN_COST."
+        },
+        "onUnknownUsage": {
+          "type": "string",
+          "enum": [
+            "allow",
+            "deny"
+          ],
+          "default": "allow",
+          "description": "What to do when a provider reports no token usage. Under allow such a provider can never exhaust a token budget, which is a documented exposure rather than an oversight; deny is the strict setting. Env override: CMR_BUDGET_ON_UNKNOWN_USAGE."
+        },
+        "stateDir": {
+          "type": "string",
+          "minLength": 1,
+          "default": "~/.claude/model-router/governance",
+          "description": "Where the budget accounting ledger lives. Separate from the telemetry store: telemetry records what happened, this is small mutable state about what is allowed. Env override: CMR_BUDGET_STATE_DIR."
+        }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Env override: CMR_TELEMETRY_ENABLED."
+        },
+        "sink": {
+          "type": "string",
+          "enum": [
+            "jsonl",
+            "sqlite",
+            "null"
+          ],
+          "default": "jsonl",
+          "description": "Env override: CMR_TELEMETRY_SINK."
+        },
+        "dir": {
+          "type": "string",
+          "minLength": 1,
+          "default": "~/.claude/model-router/telemetry",
+          "description": "Durable JSONL store. Defaults outside the plugin data dir so it survives uninstall. Env override: CMR_TELEMETRY_DIR."
+        },
+        "rotation": {
+          "type": "string",
+          "enum": [
+            "daily",
+            "none"
+          ],
+          "default": "daily",
+          "description": "Env override: CMR_TELEMETRY_ROTATION."
+        },
+        "shardByPid": {
+          "type": "boolean",
+          "default": false,
+          "description": "Write one file per process. Enable on OneDrive, SMB or mapped drives where append atomicity is not guaranteed. Env override: CMR_TELEMETRY_SHARD_BY_PID."
+        },
+        "retentionDays": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 36500,
+          "default": 90,
+          "description": "Env override: CMR_TELEMETRY_RETENTION_DAYS."
+        },
+        "primaryModel": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "description": "Counterfactual model. null means resolve it from the session transcript; it is never guessed. Env override: CMR_PRIMARY_MODEL."
+        },
+        "avoidedMethod": {
+          "type": "string",
+          "enum": [
+            "chars_div_4",
+            "calibrated_cpt",
+            "worker_prompt_tokens",
+            "anthropic_count_tokens"
+          ],
+          "default": "chars_div_4",
+          "description": "How primary-model tokens are counted. chars_div_4 under-counts source code, so savings err low. Env override: CMR_AVOIDED_METHOD."
+        },
+        "counterfactualRender": {
+          "type": "string",
+          "enum": [
+            "raw",
+            "read_tool"
+          ],
+          "default": "raw",
+          "description": "raw ignores Read line-number overhead (conservative); read_tool includes it. Env override: CMR_COUNTERFACTUAL_RENDER."
+        },
+        "countProvenFilesOnly": {
+          "type": "boolean",
+          "default": true,
+          "description": "Count only files a hook actually blocked. Inferred corpus files are the largest over-claim risk. Env override: CMR_COUNT_PROVEN_ONLY."
+        },
+        "residencyTurns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000,
+          "default": 0,
+          "description": "Subsequent turns a landed corpus would have been re-sent for. Requires residencySource. Env override: CMR_RESIDENCY_TURNS."
+        },
+        "residencySource": {
+          "type": "string",
+          "enum": [
+            "default_zero",
+            "config",
+            "transcript_measured"
+          ],
+          "default": "default_zero",
+          "description": "Provenance for residencyTurns. A non-zero value with default_zero is refused at load time. Env override: CMR_RESIDENCY_SOURCE."
+        },
+        "privacyLevel": {
+          "type": "string",
+          "enum": [
+            "hashed",
+            "labeled",
+            "verbose"
+          ],
+          "default": "hashed",
+          "description": "hashed stores no content, paths or prompts. labeled and verbose are set by the store* flags. Env override: CMR_PRIVACY_LEVEL."
+        },
+        "saltScope": {
+          "type": "string",
+          "enum": [
+            "install",
+            "team"
+          ],
+          "default": "install",
+          "description": "install keeps hashes machine-local; team shares a salt so hashes align across developers. Env override: CMR_SALT_SCOPE."
+        },
+        "storeProjectLabel": {
+          "type": "boolean",
+          "default": false,
+          "description": "Env override: CMR_STORE_PROJECT_LABEL."
+        },
+        "storeFilePaths": {
+          "type": "boolean",
+          "default": false,
+          "description": "Env override: CMR_STORE_FILE_PATHS."
+        },
+        "storeGitBranch": {
+          "type": "boolean",
+          "default": false,
+          "description": "Env override: CMR_STORE_GIT_BRANCH."
+        },
+        "storeQuestionText": {
+          "type": "boolean",
+          "default": false,
+          "description": "Opt in to storing a truncated, secret-scrubbed question. Sets privacyLevel to verbose. Env override: CMR_STORE_QUESTION_TEXT."
+        },
+        "questionTextMaxChars": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000,
+          "default": 200,
+          "description": "Env override: CMR_QUESTION_TEXT_MAX_CHARS."
+        },
+        "storeErrorDetail": {
+          "type": "boolean",
+          "default": false,
+          "description": "Env override: CMR_STORE_ERROR_DETAIL."
+        },
+        "storeContentHash": {
+          "type": "boolean",
+          "default": false,
+          "description": "Env override: CMR_STORE_CONTENT_HASH."
+        },
+        "recordGateDecisions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether a refusal writes a gate_block row as well as a delegation writing its own. Off, the store holds delegations only and the refusal denominator is lost. Env override: CMR_RECORD_GATE_DECISIONS."
+        }
+      }
+    },
+    "pricing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": [
+            "bundled",
+            "file"
+          ],
+          "default": "bundled",
+          "description": "Env override: CMR_PRICING_SOURCE."
+        },
+        "overrides": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "description": "Path to a replacement pricing table. First match wins; tables are never merged. Env override: CMR_PRICING_OVERRIDES."
+        }
+      }
+    }
+  }
+}

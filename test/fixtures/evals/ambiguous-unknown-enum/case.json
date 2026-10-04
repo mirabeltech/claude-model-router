@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "ambiguous-unknown-enum",
+  "caseVersion": 1,
+  "category": "ambiguous",
+  "shapes": [
+    "ambiguous_request"
+  ],
+  "title": "A misspelled task type becomes unknown and refuses one rule earlier",
+  "rationale": "A deliberate \"architecure\" typo. normalizeInput folds an unrecognised taskType to unknown and warns, so rule 2a owns this rather than rule 2b task_type_excluded. Exercises real normalisation code, and pins the one-rule difference between the two codes.",
+  "harness": "decide",
+  "files": [
+    {
+      "path": "files/big.ts",
+      "source": "generated",
+      "bytes": 24576,
+      "lines": 384,
+      "generator": {
+        "unit": "export const entry = { ok: true } // padpadpadpadpadpadpadpadpa",
+        "repeat": 384
+      }
+    }
+  ],
+  "routingInput": {
+    "taskType": "architecure"
+  },
+  "expected": {
+    "class": "primary",
+    "reason": "unknown_input",
+    "taskType": "unknown",
+    "decision": "allow",
+    "inputWarnings": [
+      "unknown_enum:taskType"
+    ]
+  }
+}

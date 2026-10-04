@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "intent-multiple-occurrences",
+  "caseVersion": 1,
+  "category": "bulk_read",
+  "shapes": [
+    "repetitive_content"
+  ],
+  "title": "Three deprecated entries, so stopping at the first one fails",
+  "rationale": "A single-target fixture rewards a worker that stops reading at the first hit, because there is nothing after it. Three targets make exhaustiveness falsifiable: the counts range needs all three keys present, and a worker that found one scores the same as a worker that found none.",
+  "harness": "dispatch",
+  "task": "Find every handler in this file marked deprecated. List each key.",
+  "taskIntent": {
+    "task": "Find every handler in this file marked deprecated. List each key.",
+    "requestedInformation": "every matching handler key, not a sample and not the first one",
+    "constraints": "there is more than one match; do not stop at the first",
+    "outputFormat": "one key per line"
+  },
+  "files": [
+    {
+      "path": "files/handlers.ts",
+      "source": "committed",
+      "bytes": 16598,
+      "lines": 402
+    }
+  ],
+  "expected": {
+    "class": "delegate",
+    "reason": "threshold_met",
+    "taskType": "bulk_read",
+    "decision": "deny",
+    "lane": "bulkRead",
+    "mode": "bulk-reader",
+    "dispatchStatus": "ok",
+    "dispatchReason": "completed"
+  },
+  "qualityCriteria": {
+    "exactFacts": [
+      "x_137",
+      "x_244",
+      "x_371"
+    ],
+    "counts": [
+      {
+        "term": "x_",
+        "min": 3,
+        "max": 20
+      }
+    ]
+  }
+}

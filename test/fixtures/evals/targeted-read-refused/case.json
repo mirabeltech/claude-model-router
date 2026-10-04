@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "targeted-read-refused",
+  "caseVersion": 1,
+  "category": "bulk_read",
+  "shapes": [
+    "large_file"
+  ],
+  "title": "An offset or limit read is intentional and is never delegated",
+  "rationale": "Rule 7. Claude asking for a slice has already decided what it needs, and a summary of the whole file is not that. Large enough to delegate on size, so the refusal can only be the targeted-read rule.",
+  "harness": "decide",
+  "files": [
+    {
+      "path": "files/big.ts",
+      "source": "generated",
+      "bytes": 24576,
+      "lines": 384,
+      "generator": {
+        "unit": "export const entry = { ok: true } // padpadpadpadpadpadpadpadpa",
+        "repeat": 384
+      }
+    }
+  ],
+  "routingInput": {
+    "targetedRead": true,
+    "fullRead": false
+  },
+  "expected": {
+    "class": "primary",
+    "reason": "targeted_read",
+    "taskType": "bulk_read",
+    "decision": "allow",
+    "lane": "bulkRead"
+  }
+}

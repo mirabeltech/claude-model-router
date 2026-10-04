@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "small-read-stays-primary",
+  "caseVersion": 1,
+  "category": "small_read",
+  "shapes": [
+    "small_file"
+  ],
+  "title": "A small file is never worth a round trip",
+  "rationale": "CLAUDE.md #6: small files stay with Claude. 53 bytes and one line fail every size floor, so rule 14 refuses. Mirrors test/fixtures/corpus/small.ts.",
+  "harness": "decide",
+  "files": [
+    {
+      "path": "files/tiny.ts",
+      "source": "generated",
+      "bytes": 53,
+      "lines": 1,
+      "generator": {
+        "unit": "export const tiny = 1 // padpadpadpadpadpadpadpadpad",
+        "repeat": 1
+      }
+    }
+  ],
+  "expected": {
+    "class": "primary",
+    "reason": "below_threshold",
+    "taskType": "bulk_read",
+    "decision": "allow",
+    "lane": "bulkRead"
+  }
+}

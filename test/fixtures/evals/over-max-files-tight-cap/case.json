@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "id": "over-max-files-tight-cap",
+  "caseVersion": 1,
+  "category": "multi_file_read",
+  "shapes": [
+    "multiple_files"
+  ],
+  "title": "More files than the cap refuses on the cap, before any size rule",
+  "rationale": "Rule 12 precedes rule 14, so over_max_files owns the reason even though these files are tiny. The cap is tightened to 2 by config rather than shipping 26 fixtures: the corpus must not pay for a branch an override reaches free.",
+  "harness": "decide",
+  "files": [
+    {
+      "path": "files/a.ts",
+      "source": "generated",
+      "bytes": 100,
+      "lines": 2,
+      "generator": {
+        "unit": "export const a = 1 // padpadpadpadpadpadpadpadpad",
+        "repeat": 2
+      }
+    },
+    {
+      "path": "files/b.ts",
+      "source": "generated",
+      "bytes": 100,
+      "lines": 2,
+      "generator": {
+        "unit": "export const b = 2 // padpadpadpadpadpadpadpadpad",
+        "repeat": 2
+      }
+    },
+    {
+      "path": "files/c.ts",
+      "source": "generated",
+      "bytes": 100,
+      "lines": 2,
+      "generator": {
+        "unit": "export const c = 3 // padpadpadpadpadpadpadpadpad",
+        "repeat": 2
+      }
+    }
+  ],
+  "config": {
+    "routing": {
+      "bulkRead": {
+        "maxFiles": 2
+      }
+    }
+  },
+  "expected": {
+    "class": "primary",
+    "reason": "over_max_files",
+    "taskType": "bulk_read",
+    "decision": "allow",
+    "lane": "bulkRead"
+  }
+}

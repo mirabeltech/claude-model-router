@@ -1,0 +1,25 @@
+{
+  "name": "claude-model-router",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Claude Code marketplace for model routing: delegate bulk reads and boilerplate to a cheap worker model, and measure what it saved.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "test:behavioural": "node test/behavioural/run.mjs",
+    "evals": "node test/evals/bin/run.mjs",
+    "evals:sweep": "node test/evals/bin/run.mjs --sweep",
+    "evals:build": "node test/evals/bin/build-corpus.mjs",
+    "validate": "claude plugin validate . --strict && claude plugin validate ./plugins/model-router --strict && claude plugin validate ./plugins/router-dashboard --strict",
+    "doctor": "node plugins/model-router/scripts/doctor.mjs",
+    "budget": "node plugins/model-router/scripts/budget.mjs",
+    "analytics": "node plugins/model-router/scripts/analytics.mjs",
+    "smoke:hook": "node plugins/model-router/scripts/smoke-hook.mjs",
+    "ingest": "node plugins/model-router/scripts/ingest.mjs",
+    "report": "node plugins/router-dashboard/scripts/report.mjs"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "lines-350-hook-refuses",
+  "caseVersion": 1,
+  "category": "bulk_read",
+  "shapes": [
+    "medium_file"
+  ],
+  "title": "The same file refuses through the hook, because the hook cannot count lines",
+  "rationale": "hook/adapter.mjs leaves lineCount null by design, so minLines is unreachable in production and only minBytes decides. 10500 < 12000, so the hook refuses the file the decide layer delegates. This is the only case that MEASURES the discrepancy docs/what-we-do-not-delegate.md states in prose.",
+  "harness": "hook",
+  "files": [
+    {
+      "path": "files/wide.ts",
+      "source": "generated",
+      "bytes": 10500,
+      "lines": 350,
+      "generator": {
+        "unit": "export const row = 1 // padpa",
+        "repeat": 350
+      }
+    }
+  ],
+  "expected": {
+    "class": "primary",
+    "reason": "below_threshold",
+    "taskType": "bulk_read",
+    "decision": "allow",
+    "lane": "bulkRead",
+    "outcome": "not_delegated"
+  }
+}

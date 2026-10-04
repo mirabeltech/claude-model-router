@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "id": "intent-buried-in-repetition",
+  "caseVersion": 1,
+  "category": "bulk_read",
+  "shapes": [
+    "repetitive_content"
+  ],
+  "title": "The measured live failure, with the line citation the generic task never asked for",
+  "rationale": "Reproduces the failure that motivated Phase 7: ollama/llama3 was given a near-identical table and identified neither the deprecation nor the entity. Same shape as shape-repetitive-content, but the intent demands the entity AND its line, and the neighbouring lines are decoys so a citation guessed from position fails.",
+  "harness": "dispatch",
+  "task": "Exactly one handler in this file is marked deprecated. Which key is it, and on which line?",
+  "taskIntent": {
+    "task": "Exactly one handler in this file is marked deprecated. Which key is it, and on which line?",
+    "requestedInformation": "the handler key exactly as written, and the line number it is declared on",
+    "constraints": "every row looks alike, so read the flag rather than inferring from position"
+  },
+  "files": [
+    {
+      "path": "files/handlers.ts",
+      "source": "committed",
+      "bytes": 12380,
+      "lines": 302
+    }
+  ],
+  "expected": {
+    "class": "delegate",
+    "reason": "threshold_met",
+    "taskType": "bulk_read",
+    "decision": "deny",
+    "lane": "bulkRead",
+    "mode": "bulk-reader",
+    "dispatchStatus": "ok",
+    "dispatchReason": "completed"
+  },
+  "qualityCriteria": {
+    "exactFacts": [
+      "x_137"
+    ],
+    "forbiddenTerms": [
+      "x_136",
+      "x_138",
+      "x_1137",
+      "x_013"
+    ],
+    "lineCitations": [
+      {
+        "fact": "x_137",
+        "line": 140,
+        "decoyLines": [
+          136,
+          138,
+          139,
+          141
+        ]
+      }
+    ]
+  }
+}

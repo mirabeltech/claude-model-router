@@ -1,0 +1,11 @@
+node_modules/
+*.log
+.DS_Store
+
+# derived telemetry / local state — never committed
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+test/behavioural/sandbox/
+test/.tmp/
+router-report-*.html

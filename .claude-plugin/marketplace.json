@@ -1,0 +1,32 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "claude-model-router",
+  "description": "Model routing for Claude Code: delegate bulk reads and boilerplate generation to a cheap worker model, and measure what it saved.",
+  "version": "0.1.0",
+  "owner": {
+    "name": "Mirabel Technologies"
+  },
+  "metadata": {
+    "pluginRoot": "./plugins"
+  },
+  "plugins": [
+    {
+      "name": "model-router",
+      "source": "./plugins/model-router",
+      "description": "Keeps Claude as the primary reasoning agent while shunting bulk file reading and predictable boilerplate generation to a cheap worker model. Hooks gate large reads, skills steer delegation, and every delegation is measured.",
+      "version": "0.1.0",
+      "author": { "name": "Mirabel Technologies" },
+      "category": "developer-tools",
+      "keywords": ["model-routing", "token-optimization", "delegation", "telemetry", "cost"]
+    },
+    {
+      "name": "router-dashboard",
+      "source": "./plugins/router-dashboard",
+      "description": "Reads the model-router telemetry store and renders a self-contained HTML report: delegated tasks, tokens, worker cost, estimated savings, latency and routing quality.",
+      "version": "0.1.0",
+      "author": { "name": "Mirabel Technologies" },
+      "category": "developer-tools",
+      "keywords": ["telemetry", "reporting", "dashboard", "cost"]
+    }
+  ]
+}

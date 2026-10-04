@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "size-just-below-min-bytes",
+  "caseVersion": 1,
+  "category": "bulk_read",
+  "shapes": [
+    "medium_file"
+  ],
+  "title": "One byte below minBytes stays with Claude",
+  "rationale": "Rules 1-11 all pass, so thresholdMet decides: 11999 < minBytes 12000, lineCount 169 < minLines 350, and minEstimatedTokens is null by default. Size is unsatisfied, so rule 14 owns the refusal.",
+  "harness": "decide",
+  "files": [
+    {
+      "path": "files/below.ts",
+      "source": "generated",
+      "bytes": 11999,
+      "lines": 169,
+      "generator": {
+        "unit": "export const belowThreshold = true // padpadpadpadpadpadpadpadpadpadpa",
+        "repeat": 169
+      }
+    }
+  ],
+  "expected": {
+    "class": "primary",
+    "reason": "below_threshold",
+    "taskType": "bulk_read",
+    "decision": "allow",
+    "lane": "bulkRead"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "over-max-bytes-tight-ceiling",
+  "caseVersion": 1,
+  "category": "bulk_read",
+  "shapes": [
+    "medium_file"
+  ],
+  "title": "A payload over the worker ceiling refuses rather than truncating",
+  "rationale": "Rule 13. The ceiling is lowered to 1024 by config instead of shipping a 2 MB fixture. Refusing beats truncating: a worker summarising half a file produces a confident answer about content it never saw.",
+  "harness": "decide",
+  "files": [
+    {
+      "path": "files/wide.ts",
+      "source": "generated",
+      "bytes": 4000,
+      "lines": 80,
+      "generator": {
+        "unit": "export const wide = true // padpadpadpadpadpadpad",
+        "repeat": 80
+      }
+    }
+  ],
+  "config": {
+    "worker": {
+      "maxInputBytes": 1024
+    }
+  },
+  "expected": {
+    "class": "primary",
+    "reason": "over_max_input_bytes",
+    "taskType": "bulk_read",
+    "decision": "allow",
+    "lane": "bulkRead"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "worker-not-ready-refused",
+  "caseVersion": 1,
+  "category": "bulk_read",
+  "shapes": [
+    "large_file"
+  ],
+  "title": "No configured worker means plain Claude Code, not a blocked read",
+  "rationale": "Rule 11, and the gate failing open. This is what a fresh install sees before a worker is configured, and it must degrade to ordinary behaviour rather than to a denied Read.",
+  "harness": "hook",
+  "files": [
+    {
+      "path": "files/big.ts",
+      "source": "generated",
+      "bytes": 24576,
+      "lines": 384,
+      "generator": {
+        "unit": "export const entry = { ok: true } // padpadpadpadpadpadpadpadpa",
+        "repeat": 384
+      }
+    }
+  ],
+  "expected": {
+    "class": "primary",
+    "reason": "worker_not_ready",
+    "taskType": "bulk_read",
+    "decision": "allow",
+    "lane": "bulkRead",
+    "outcome": "not_delegated"
+  },
+  "metadata": {
+    "worker": "absent"
+  }
+}

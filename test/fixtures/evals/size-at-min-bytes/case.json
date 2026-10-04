@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "size-at-min-bytes",
+  "caseVersion": 1,
+  "category": "bulk_read",
+  "shapes": [
+    "medium_file"
+  ],
+  "title": "Exactly minBytes delegates, because the comparison is inclusive",
+  "rationale": "minBytes is compared with >=, so 12000 satisfies the size floor. This is the case that proves the gate is not a constant function; without it a gate that never delegates would pass every other size case.",
+  "harness": "decide",
+  "files": [
+    {
+      "path": "files/at.ts",
+      "source": "generated",
+      "bytes": 12000,
+      "lines": 160,
+      "generator": {
+        "unit": "export const atThreshold = true // padpadpadpadpadpadpadpadpadpadpadpadpad",
+        "repeat": 160
+      }
+    }
+  ],
+  "expected": {
+    "class": "delegate",
+    "reason": "threshold_met",
+    "taskType": "bulk_read",
+    "decision": "deny",
+    "lane": "bulkRead",
+    "mode": "bulk-reader"
+  }
+}

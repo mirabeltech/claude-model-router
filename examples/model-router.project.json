@@ -1,0 +1,77 @@
+{
+  "$schema": "../plugins/model-router/lib/config.schema.json",
+
+  // Commit this file at <project>/.claude/model-router.json to share routing
+  // policy with the team. It overrides each developer's personal config, and is
+  // itself overridden by CMR_* environment variables so CI can always win.
+  "worker": {
+    "provider": "gemini",
+    "model": "gemini-2.5-flash"
+  },
+
+  "routing": {
+    "bulkRead": {
+      "minLines": 350
+    },
+    // Added to, not replacing, your own judgement: anything matching these is
+    // read locally by Claude and never sent to a worker.
+    "denyGlobs": [
+      "**/.env*",
+      "**/*secret*",
+      "**/*credential*",
+      "**/*.pem",
+      "**/*.key",
+      "**/id_rsa*",
+      "**/.git/**",
+      "**/auth/**",
+      "**/security/**",
+      "**/migrations/**"
+    ]
+  },
+
+  "hooks": {
+    "taskIntent": {
+      // "none" (the default) sends the worker a fixed generic task, so nothing from your session
+      // leaves the machine. "transcript" lets the hook recover your newest prompt and ask the
+      // worker THAT instead — a much better question, and one that sends your prompt text to the
+      // worker model. Left at the default here deliberately: a committed team config should not
+      // decide that for everyone. Clamped by maxChars and passed through secret redaction either
+      // way. See docs/worker-task-construction.md.
+      "source": "none",
+      "maxChars": 600
+    }
+  },
+
+  // Governance. Every limit ships null, meaning "no configured limit" — which is NOT the same
+  // as 0, a deliberately configured zero budget. Uncomment one to make it bind.
+  //
+  // Worth knowing before you set a dollar figure: every rate in the bundled pricing table is
+  // null, so worker cost is NULL until you configure `pricing.overrides`. A monetary budget has
+  // nothing to accumulate against until then, and `npm run doctor` says so. A TOKEN budget
+  // works immediately wherever the provider reports usage.
+  "budget": {
+    "enabled": true,
+    "run": {
+      // A per-run runaway guard needs no persisted state, which makes it the safest first limit.
+      // "maxTotalTokens": 200000
+    },
+    "daily": {
+      // "maxTotalTokens": 5000000,
+      // "maxWorkerCostUsd": 5.0
+    },
+    "monthly": {
+      // "maxWorkerCostUsd": 50.0
+    },
+    // disable denies delegation at the limit and the read continues on plain Claude Code;
+    // warn delegates anyway and records the breach. Neither fails your request.
+    "onExceed": "disable"
+  },
+
+  "telemetry": {
+    "enabled": true,
+    // Keep the conservative defaults: hashed paths, no prompts stored,
+    // savings counted only over files a hook actually blocked.
+    "privacyLevel": "hashed",
+    "countProvenFilesOnly": true
+  }
+}

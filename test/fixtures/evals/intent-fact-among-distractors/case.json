@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "id": "intent-fact-among-distractors",
+  "caseVersion": 1,
+  "category": "bulk_read",
+  "shapes": [
+    "high_noise"
+  ],
+  "title": "Three real declarations in bundled soup, each to be named and placed",
+  "rationale": "Pairs with shape-high-noise on the same content but a harder question: that case asks what the exports are, this one asks where they are. Long machine-generated lines give a worker nothing to orient by, so a line number here is either read or invented.",
+  "harness": "dispatch",
+  "task": "This file is bundled output with a few real declarations in it. Name each one and give its line.",
+  "taskIntent": {
+    "task": "This file is bundled output with a few real declarations in it. Name each one and give its line.",
+    "requestedInformation": "each top-level declaration, its exact name, and the line it is on",
+    "constraints": "the surrounding lines are minified bundle output and declare nothing; do not report them"
+  },
+  "files": [
+    {
+      "path": "files/bundle.js",
+      "source": "committed",
+      "bytes": 15456,
+      "lines": 122
+    }
+  ],
+  "expected": {
+    "class": "delegate",
+    "reason": "threshold_met",
+    "taskType": "bulk_read",
+    "decision": "deny",
+    "lane": "bulkRead",
+    "mode": "bulk-reader",
+    "dispatchStatus": "ok",
+    "dispatchReason": "completed"
+  },
+  "qualityCriteria": {
+    "requiredEntities": [
+      "parseManifest",
+      "MANIFEST_VERSION",
+      "ManifestWriter"
+    ],
+    "lineCitations": [
+      {
+        "fact": "parseManifest",
+        "line": 40,
+        "decoyLines": [
+          39,
+          41
+        ]
+      },
+      {
+        "fact": "MANIFEST_VERSION",
+        "line": 77,
+        "decoyLines": [
+          76,
+          78
+        ]
+      },
+      {
+        "fact": "ManifestWriter",
+        "line": 104,
+        "decoyLines": [
+          103,
+          105
+        ]
+      }
+    ]
+  }
+}

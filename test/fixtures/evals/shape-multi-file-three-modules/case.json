@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "id": "shape-multi-file-three-modules",
+  "caseVersion": 1,
+  "category": "multi_file_read",
+  "shapes": [
+    "multiple_files"
+  ],
+  "title": "Which of three modules defines a given function",
+  "rationale": "A multi-file payload is reachable only at the dispatch layer: run.mjs sends exactly one file. Tests that the answer attributes a declaration to the right file rather than summarising all three generically.",
+  "harness": "dispatch",
+  "task": "Which of these three modules defines resolveWorker, and what does it return? Name the file.",
+  "files": [
+    {
+      "path": "files/dispatch.ts",
+      "source": "generated",
+      "bytes": 6144,
+      "lines": 96,
+      "generator": {
+        "unit": "export function resolveWorker() { return { provider: 1 } } // p",
+        "repeat": 96
+      }
+    },
+    {
+      "path": "files/telemetry.ts",
+      "source": "generated",
+      "bytes": 5120,
+      "lines": 80,
+      "generator": {
+        "unit": "export function buildEvent() { return {} } // padpadpadpadpadpa",
+        "repeat": 80
+      }
+    },
+    {
+      "path": "files/globs.ts",
+      "source": "generated",
+      "bytes": 4096,
+      "lines": 64,
+      "generator": {
+        "unit": "export function matchesGlob() { return false } // padpadpadpadp",
+        "repeat": 64
+      }
+    }
+  ],
+  "expected": {
+    "class": "delegate",
+    "reason": "threshold_met",
+    "taskType": "bulk_read",
+    "decision": "deny",
+    "lane": "bulkRead",
+    "mode": "bulk-reader",
+    "dispatchStatus": "ok",
+    "dispatchReason": "completed"
+  },
+  "qualityCriteria": {
+    "requiredEntities": [
+      "resolveWorker"
+    ],
+    "fileReferences": [
+      "files/dispatch.ts"
+    ],
+    "forbiddenTerms": [
+      "probably",
+      "appears to",
+      "might be",
+      "I cannot tell"
+    ]
+  }
+}

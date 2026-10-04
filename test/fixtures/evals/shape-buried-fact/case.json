@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "id": "shape-buried-fact",
+  "caseVersion": 1,
+  "category": "bulk_read",
+  "shapes": [
+    "buried_in_large"
+  ],
+  "title": "One constant deep in a long file, among four decoys of the same shape",
+  "rationale": "The only deterministic accuracy question in the corpus: a planted fact with decoys has a right answer known in advance. Four other *_CEILING constants hold 3, 5, 9 and 11 at known lines, so citing \"a line\" is not enough — citing a decoy line fails.",
+  "harness": "dispatch",
+  "task": "What is the retry ceiling in this file, and on which line is it declared?",
+  "files": [
+    {
+      "path": "files/engine.ts",
+      "source": "committed",
+      "bytes": 48164,
+      "lines": 900
+    }
+  ],
+  "expected": {
+    "class": "delegate",
+    "reason": "threshold_met",
+    "taskType": "bulk_read",
+    "decision": "deny",
+    "lane": "bulkRead",
+    "mode": "bulk-reader",
+    "dispatchStatus": "ok",
+    "dispatchReason": "completed"
+  },
+  "qualityCriteria": {
+    "exactFacts": [
+      {
+        "literal": "RETRY_CEILING = 7"
+      }
+    ],
+    "lineCitations": [
+      {
+        "fact": "RETRY_CEILING",
+        "line": 700,
+        "decoyLines": [
+          120,
+          310,
+          520,
+          840
+        ]
+      }
+    ],
+    "forbiddenTerms": [
+      "RETRY_CEILING = 3",
+      "RETRY_CEILING = 5",
+      "RETRY_CEILING = 9",
+      "RETRY_CEILING = 11"
+    ]
+  }
+}

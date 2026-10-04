@@ -1,0 +1,12 @@
+# Normalise line endings on checkin for everything text-like. Without this, a
+# Windows checkout rewrites every line ending and the byte-exactness gates in
+# ci.yml ("Analytics and report are reproducible", "Eval corpus is not stale")
+# fail by platform rather than by regression.
+* text=auto eol=lf
+
+# Fixtures that carry byte-exact claims. The telemetry segments are read back and
+# compared byte-for-byte; the corpus files are measured in bytes and lines by the
+# routing thresholds, so a CRLF checkout changes what the gate decides.
+test/fixtures/telemetry/*.jsonl text eol=lf
+test/fixtures/corpus/** text eol=lf
+test/fixtures/evals/** text eol=lf

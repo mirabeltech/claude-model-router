@@ -1,0 +1,11 @@
+{
+  "name": "model-router",
+  "displayName": "Model Router",
+  "version": "0.1.0",
+  "description": "Keeps Claude as the primary reasoning agent while shunting bulk file reading and predictable boilerplate generation to a cheap worker model. Hooks gate large reads, skills steer delegation, and every delegation is measured.",
+  "author": { "name": "Mirabel Technologies" },
+  "repository": "https://github.com/mirabeltech/claude-model-router",
+  "license": "Apache-2.0",
+  "keywords": ["model-routing", "token-optimization", "delegation", "telemetry", "cost"],
+  "skills": "./skills/"
+}

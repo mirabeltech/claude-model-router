@@ -1,0 +1,90 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    # The write path makes platform-specific claims about append atomicity and
+    # path normalization, so both platforms are gating, not informational.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Unit and integration tests
+        run: npm test
+      - name: Config schema is not stale
+        run: node plugins/model-router/scripts/gen-config-schema.mjs && git diff --exit-code
+
+      # The deterministic arm is offline and keyless — the mock provider behind an injected
+      # fetchImpl, no socket and no API key — so it gates like any other test. It exits non-zero if
+      # a case disagrees with its expectation or a non-advisory gate fails. Both platforms run it
+      # because the corpus makes byte-exact claims about fixtures, and `core.autocrlf` differs.
+      - name: Deterministic benchmark
+        run: npm run evals -- --quiet --no-color
+
+      # Two runs must produce a byte-identical golden projection. Run on Linux only: the claim is
+      # that a rerun reproduces, and the cross-platform half is covered by the projection omitting
+      # the machine-local tz_offset_minutes.
+      - name: Benchmark is reproducible
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          npm run evals -- --quiet --no-color --json /tmp/evals-a
+          npm run evals -- --quiet --no-color --json /tmp/evals-b
+          diff /tmp/evals-a/stable.jsonl /tmp/evals-b/stable.jsonl
+
+      # The analytics response crosses a process boundary into a different plugin, which may not
+      # import a line of this one, so the response IS the contract between them. A byte-level
+      # drift between two runs of the same input is a contract break, not a cosmetic one. Both
+      # platforms, because the dashboard interpolates strings into HTML and line endings differ.
+      - name: Analytics and report are reproducible
+        shell: bash
+        run: |
+          export CMR_TELEMETRY_DIR=test/fixtures/telemetry
+          npm run --silent analytics -- --json --now 2026-03-04T12:00:00.000Z > a.json
+          npm run --silent analytics -- --json --now 2026-03-04T12:00:00.000Z > b.json
+          diff a.json b.json
+          npm run --silent report -- --input a.json --now 2026-03-04T12:00:00.000Z --out a.html
+          npm run --silent report -- --input b.json --now 2026-03-04T12:00:00.000Z --out b.html
+          diff a.html b.html
+          rm -f a.json b.json a.html b.html
+
+      # THE SHIPPED STATE OF EVERY NEW INSTALL. Every rate in the bundled pricing table is null,
+      # so a default install must report no price at all. If this ever prints a dollar figure, a
+      # rate was invented somewhere between the pricing table and the HTML.
+      - name: A default install reports no dollar figure
+        shell: bash
+        run: |
+          export CMR_TELEMETRY_DIR=test/fixtures/telemetry/empty
+          npm run --silent analytics -- --json --now 2026-03-04T12:00:00.000Z > empty.json
+          npm run --silent report -- --input empty.json --now 2026-03-04T12:00:00.000Z --out empty.html
+          if grep -qE '\$[0-9]' empty.html; then echo 'a price was invented'; exit 1; fi
+          rm -f empty.json empty.html
+
+      # The corpus is generated and committed, so a hand edit that drifts from the manifest fails
+      # here the same way a stale config schema does.
+      - name: Eval corpus is not stale
+        run: npm run evals:build && git diff --exit-code
+
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install Claude Code CLI
+        run: npm i -g @anthropic-ai/claude-code
+      - name: Validate marketplace and plugin manifests
+        run: |
+          claude plugin validate . --strict
+          claude plugin validate ./plugins/model-router --strict
+          claude plugin validate ./plugins/router-dashboard --strict

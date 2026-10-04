@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "unnamed-corpus-refused",
+  "caseVersion": 1,
+  "category": "ambiguous",
+  "shapes": [
+    "ambiguous_request"
+  ],
+  "title": "Claiming files without naming them is not permission to delegate",
+  "rationale": "Rule 10. A caller reporting fileCount 3 with an empty paths array cannot have its paths checked against the deny list, so the gate cannot prove the corpus is safe to send. Unknown input refuses.",
+  "harness": "decide",
+  "files": [],
+  "routingInput": {
+    "fileCount": 3,
+    "paths": []
+  },
+  "expected": {
+    "class": "primary",
+    "reason": "unknown_input",
+    "taskType": "bulk_read",
+    "decision": "allow",
+    "lane": "bulkRead"
+  }
+}

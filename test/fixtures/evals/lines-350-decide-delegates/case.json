@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "lines-350-decide-delegates",
+  "caseVersion": 1,
+  "category": "bulk_read",
+  "shapes": [
+    "medium_file"
+  ],
+  "title": "minLines satisfies the size floor on its own at the decide layer",
+  "rationale": "thresholdMet ORs its three size signals. 10500 bytes is under minBytes, but 350 lines meets minLines exactly, so size is satisfied. Pairs with lines-350-hook-refuses on the identical file.",
+  "harness": "decide",
+  "files": [
+    {
+      "path": "files/wide.ts",
+      "source": "generated",
+      "bytes": 10500,
+      "lines": 350,
+      "generator": {
+        "unit": "export const row = 1 // padpa",
+        "repeat": 350
+      }
+    }
+  ],
+  "routingInput": {
+    "lineCount": 350
+  },
+  "expected": {
+    "class": "delegate",
+    "reason": "threshold_met",
+    "taskType": "bulk_read",
+    "decision": "deny",
+    "lane": "bulkRead",
+    "mode": "bulk-reader"
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/mirabeltech/claude-model-router/pricing.schema.json",
+  "title": "model-router pricing table",
+  "description": "The shape a pricing.overrides file must have. Rates are USD per MILLION tokens, matching how every vendor publishes them, so transcribing from a verify URL is a copy rather than a conversion. The `unit` literal is required: a hand-written per-token table is rejected at load rather than silently producing costs a million times too low. Tables are never merged — an override row wins entirely, and a rate absent from that row is unpriced (null), not inherited.",
+  "type": "object",
+  "required": ["pricingVersion", "unit", "currency", "models"],
+  "additionalProperties": true,
+  "properties": {
+    "$schema": { "type": "string" },
+    "pricingVersion": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stamped onto every event this table prices, so a stored row can name the table it was priced against. Bump it whenever a rate changes."
+    },
+    "unit": {
+      "const": "per_mtok",
+      "description": "Required literal. Guards against a per-token table being loaded as per-million."
+    },
+    "currency": {
+      "const": "USD",
+      "description": "Only USD in calc_version 1. Any other value is rejected rather than converted."
+    },
+    "models": {
+      "type": "object",
+      "description": "Keyed by `${provider}:${model}`, never by model alone: the same model name served through ollama and through a cloud API cost wildly different amounts. A `${provider}:*` key prices a whole provider in one row.",
+      "propertyNames": { "pattern": "^[a-z0-9_-]+:.+$" },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["provider", "model", "verify"],
+        "additionalProperties": true,
+        "properties": {
+          "provider": { "type": "string", "minLength": 1 },
+          "model": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The model the provider reports having served, or \"*\" for every model of this provider."
+          },
+          "inputPerMTok": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "description": "Uncached prompt tokens, USD per million. null means deliberately unpriced, which yields a NULL cost — never a zero."
+          },
+          "cachedInputPerMTok": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "description": "Cache-READ tokens, USD per million. Priced separately from inputPerMTok so a cached token is never charged at the full input rate."
+          },
+          "cacheWritePerMTok": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "description": "Reserved. Unused in calc_version 1."
+          },
+          "outputPerMTok": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "description": "Output tokens, USD per million. Thinking tokens are billed here too."
+          },
+          "thinkingBilledAsOutput": {
+            "type": "boolean",
+            "description": "Documents that thinking tokens use outputPerMTok rather than a rate of their own. calc_version 1 has no separate thinking rate."
+          },
+          "verify": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Where a human can check this rate. Required even when the rates are null, because a null rate is a prompt to act."
+          },
+          "verifiedAt": {
+            "type": ["string", "null"],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "ISO date a human last checked the rate against `verify`. null means never verified."
+          },
+          "effectiveFrom": {
+            "type": ["string", "null"],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Reserved. Unused in calc_version 1; a rate change is expressed by bumping pricingVersion."
+          }
+        }
+      }
+    }
+  }
+}

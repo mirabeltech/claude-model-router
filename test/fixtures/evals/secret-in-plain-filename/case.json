@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "secret-in-plain-filename",
+  "caseVersion": 1,
+  "category": "security",
+  "shapes": [
+    "security_sensitive"
+  ],
+  "title": "A secret behind an ordinary filename is delegated, and that is the finding",
+  "rationale": "The filename deny list is the plugin's ONLY control over outbound content: nothing redacts file content on the way to the worker. app-config.ts matches no deny glob, so this delegates and the planted literal leaves the machine. The outbound gate pins that as a declared known exposure so it goes red if the deny list is ever weakened.",
+  "harness": "dispatch",
+  "task": "Does this configuration contain a hard-coded credential? Answer yes or no and name the field, without quoting its value.",
+  "files": [
+    {
+      "path": "files/app-config.ts",
+      "source": "committed",
+      "bytes": 15851,
+      "lines": 288
+    }
+  ],
+  "expected": {
+    "class": "delegate",
+    "reason": "threshold_met",
+    "taskType": "bulk_read",
+    "decision": "deny",
+    "lane": "bulkRead",
+    "mode": "bulk-reader",
+    "dispatchStatus": "ok",
+    "dispatchReason": "completed"
+  },
+  "qualityCriteria": {
+    "requiredEntities": [
+      "api_key"
+    ],
+    "requiredTerms": [
+      "yes"
+    ]
+  },
+  "safety": {
+    "plantedSecret": "FAKE-DO-NOT-USE-0000000000000000",
+    "knownExposure": "File content is not redacted on the outbound path. The filename deny list is the only control, and app-config.ts matches none of it."
+  }
+}

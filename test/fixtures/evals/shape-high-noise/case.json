@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "id": "shape-high-noise",
+  "caseVersion": 1,
+  "category": "bulk_read",
+  "shapes": [
+    "high_noise"
+  ],
+  "title": "Three real declarations buried in bundled output",
+  "rationale": "Models the realistic worst case: long machine-generated lines where the three things a human cares about are indistinguishable by position. Tests recall of the signal, not tolerance of the noise.",
+  "harness": "dispatch",
+  "task": "Name every exported declaration in this file. Ignore the bundled noise.",
+  "files": [
+    {
+      "path": "files/bundle.js",
+      "source": "committed",
+      "bytes": 15456,
+      "lines": 122
+    }
+  ],
+  "expected": {
+    "class": "delegate",
+    "reason": "threshold_met",
+    "taskType": "bulk_read",
+    "decision": "deny",
+    "lane": "bulkRead",
+    "mode": "bulk-reader",
+    "dispatchStatus": "ok",
+    "dispatchReason": "completed"
+  },
+  "qualityCriteria": {
+    "requiredEntities": [
+      "parseManifest",
+      "MANIFEST_VERSION",
+      "ManifestWriter"
+    ],
+    "counts": [
+      {
+        "term": "export",
+        "min": 3
+      }
+    ]
+  }
+}

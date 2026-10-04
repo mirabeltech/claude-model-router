@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "precise-output-requested",
+  "caseVersion": 1,
+  "category": "precise_edit",
+  "shapes": [
+    "precise_edit_request"
+  ],
+  "title": "A request for a patch is never answered with a summary",
+  "rationale": "Rule 6. requestedOutput \"patch\" is in PRECISE_OUTPUTS, and a precise output needs exact bytes. This exercises a genuinely different branch from the task-type allowlist, which three identical task_type_excluded cases would not.",
+  "harness": "decide",
+  "files": [
+    {
+      "path": "files/big.ts",
+      "source": "generated",
+      "bytes": 24576,
+      "lines": 384,
+      "generator": {
+        "unit": "export const entry = { ok: true } // padpadpadpadpadpadpadpadpa",
+        "repeat": 384
+      }
+    }
+  ],
+  "routingInput": {
+    "requestedOutput": "patch"
+  },
+  "expected": {
+    "class": "primary",
+    "reason": "precise_output_requested",
+    "taskType": "bulk_read",
+    "decision": "allow",
+    "lane": "bulkRead"
+  }
+}

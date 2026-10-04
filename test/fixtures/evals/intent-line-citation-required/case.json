@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "id": "intent-line-citation-required",
+  "caseVersion": 1,
+  "category": "bulk_read",
+  "shapes": [
+    "repetitive_content"
+  ],
+  "title": "Three citations, each falsifiable against its own neighbours",
+  "rationale": "A confidently wrong line number is the most common worker failure and the hardest to notice, because the answer reads correctly. Three citations are checked, each with the rows either side as decoys, so an answer that is right about the keys and wrong about where they are fails.",
+  "harness": "dispatch",
+  "task": "Every handler marked deprecated: give the key and the exact line it is declared on.",
+  "taskIntent": {
+    "task": "Every handler marked deprecated: give the key and the exact line it is declared on.",
+    "requestedInformation": "the key and the line number for each match",
+    "constraints": "cite the line the declaration is actually on; do not estimate it",
+    "outputFormat": "key followed by its line number"
+  },
+  "files": [
+    {
+      "path": "files/handlers.ts",
+      "source": "committed",
+      "bytes": 16598,
+      "lines": 402
+    }
+  ],
+  "expected": {
+    "class": "delegate",
+    "reason": "threshold_met",
+    "taskType": "bulk_read",
+    "decision": "deny",
+    "lane": "bulkRead",
+    "mode": "bulk-reader",
+    "dispatchStatus": "ok",
+    "dispatchReason": "completed"
+  },
+  "qualityCriteria": {
+    "exactFacts": [
+      "x_137",
+      "x_244",
+      "x_371"
+    ],
+    "lineCitations": [
+      {
+        "fact": "x_137",
+        "line": 140,
+        "decoyLines": [
+          139,
+          141
+        ]
+      },
+      {
+        "fact": "x_244",
+        "line": 247,
+        "decoyLines": [
+          246,
+          248
+        ]
+      },
+      {
+        "fact": "x_371",
+        "line": 374,
+        "decoyLines": [
+          373,
+          375
+        ]
+      }
+    ]
+  }
+}

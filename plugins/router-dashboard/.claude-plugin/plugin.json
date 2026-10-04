@@ -1,0 +1,18 @@
+{
+  "name": "router-dashboard",
+  "displayName": "Router Dashboard",
+  "version": "0.1.0",
+  "description": "Renders a model-router analytics response as a self-contained HTML report: delegation rate, worker usage, tokens avoided, cost and its measurement coverage, latency, governance decisions and data quality. Read-only, and it never recomputes cost.",
+  "author": {
+    "name": "Mirabel Technologies"
+  },
+  "repository": "https://github.com/mirabeltech/claude-model-router",
+  "license": "Apache-2.0",
+  "keywords": [
+    "telemetry",
+    "reporting",
+    "dashboard",
+    "cost"
+  ],
+  "skills": "./skills/"
+}

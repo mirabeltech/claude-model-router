@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "missing-transcript-refuses",
+  "caseVersion": 1,
+  "category": "bulk_read",
+  "shapes": [
+    "large_file"
+  ],
+  "title": "An unreadable transcript refuses, because unknown is never the favorable value",
+  "rationale": "recentlyEdited() returns true when it cannot measure, and the gate has no vocabulary for \"unknown\". A corpus of static directories has no transcript, so this is the trap that makes a first harness run report total refusal — it is pinned here rather than rediscovered.",
+  "harness": "hook",
+  "files": [
+    {
+      "path": "files/big.ts",
+      "source": "generated",
+      "bytes": 24576,
+      "lines": 384,
+      "generator": {
+        "unit": "export const entry = { ok: true } // padpadpadpadpadpadpadpadpa",
+        "repeat": 384
+      }
+    }
+  ],
+  "expected": {
+    "class": "primary",
+    "reason": "recently_edited",
+    "taskType": "bulk_read",
+    "decision": "allow",
+    "lane": "bulkRead",
+    "outcome": "not_delegated"
+  },
+  "metadata": {
+    "transcript": "absent"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "id": "intent-entity-extraction",
+  "caseVersion": 1,
+  "category": "bulk_read",
+  "shapes": [
+    "buried_in_large"
+  ],
+  "title": "Entity extraction where one near-miss says the word without being a match",
+  "rationale": "The one criterion no other case carries: a documented EXAMPLE of the flag, on an ordinary row. A worker that pattern-matches on the word reports four keys and names x_088, which is a forbidden term here. This is what \"distinguish an actual match from something that resembles one\" means operationally.",
+  "harness": "dispatch",
+  "task": "Which handler keys are deprecated? Return the keys exactly as written and nothing else.",
+  "taskIntent": {
+    "task": "Which handler keys are deprecated? Return the keys exactly as written and nothing else.",
+    "requestedInformation": "the deprecated handler keys, verbatim",
+    "constraints": "one row mentions the flag in a comment as documentation; that row is not deprecated. Report only real matches.",
+    "outputFormat": "the keys alone"
+  },
+  "files": [
+    {
+      "path": "files/handlers.ts",
+      "source": "committed",
+      "bytes": 16598,
+      "lines": 402
+    }
+  ],
+  "expected": {
+    "class": "delegate",
+    "reason": "threshold_met",
+    "taskType": "bulk_read",
+    "decision": "deny",
+    "lane": "bulkRead",
+    "mode": "bulk-reader",
+    "dispatchStatus": "ok",
+    "dispatchReason": "completed"
+  },
+  "qualityCriteria": {
+    "exactFacts": [
+      "x_137",
+      "x_244",
+      "x_371"
+    ],
+    "forbiddenTerms": [
+      "x_088",
+      "x_089",
+      "x_087"
+    ]
+  }
+}

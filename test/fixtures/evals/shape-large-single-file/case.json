@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "id": "shape-large-single-file",
+  "caseVersion": 1,
+  "category": "bulk_read",
+  "shapes": [
+    "large_file"
+  ],
+  "title": "A fifty-kilobyte file, near the mock provider ceiling",
+  "rationale": "The largest payload the corpus sends. Also guards the 60000-byte prompt ceiling: raise this fixture and the loader says why dispatch would fail, instead of the provider reporting payload_too_large and taking the blame.",
+  "harness": "dispatch",
+  "task": "Summarise this file for an engineer who has not seen it.",
+  "files": [
+    {
+      "path": "files/huge.ts",
+      "source": "generated",
+      "bytes": 51200,
+      "lines": 800,
+      "generator": {
+        "unit": "export const record = { kind: \"row\" } // padpadpadpadpadpadpadp",
+        "repeat": 800
+      }
+    }
+  ],
+  "expected": {
+    "class": "delegate",
+    "reason": "threshold_met",
+    "taskType": "bulk_read",
+    "decision": "deny",
+    "lane": "bulkRead",
+    "mode": "bulk-reader",
+    "dispatchStatus": "ok",
+    "dispatchReason": "completed"
+  },
+  "qualityCriteria": {
+    "requiredEntities": [
+      "record"
+    ],
+    "forbiddenTerms": [
+      "I cannot",
+      "unable to read",
+      "truncated"
+    ]
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "recently-edited-refused",
+  "caseVersion": 1,
+  "category": "bulk_read",
+  "shapes": [
+    "large_file"
+  ],
+  "title": "A file Claude just edited is read in full, from a real transcript",
+  "rationale": "Rule 8, and MEASURED rather than asserted: the harness writes a transcript whose last turn is an Edit against this path, and hook/facts.mjs recentlyEdited() reads it. Claude needs the exact current bytes after its own edit, not a summary of them.",
+  "harness": "hook",
+  "files": [
+    {
+      "path": "files/big.ts",
+      "source": "generated",
+      "bytes": 24576,
+      "lines": 384,
+      "generator": {
+        "unit": "export const entry = { ok: true } // padpadpadpadpadpadpadpadpa",
+        "repeat": 384
+      }
+    }
+  ],
+  "expected": {
+    "class": "primary",
+    "reason": "recently_edited",
+    "taskType": "bulk_read",
+    "decision": "allow",
+    "lane": "bulkRead",
+    "outcome": "not_delegated"
+  },
+  "metadata": {
+    "transcript": "edit"
+  }
+}

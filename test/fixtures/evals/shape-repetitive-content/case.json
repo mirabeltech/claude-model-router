@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "id": "shape-repetitive-content",
+  "caseVersion": 1,
+  "category": "bulk_read",
+  "shapes": [
+    "repetitive_content"
+  ],
+  "title": "One deprecated entry among three hundred identical ones",
+  "rationale": "Catches a worker that pattern-matches instead of reading. Every block is near-identical, so an answer naming a neighbour has guessed from position; the neighbours are forbidden terms for exactly that reason.",
+  "harness": "dispatch",
+  "task": "Exactly one handler in this file is marked deprecated. Which key is it?",
+  "files": [
+    {
+      "path": "files/handlers.ts",
+      "source": "committed",
+      "bytes": 12380,
+      "lines": 302
+    }
+  ],
+  "expected": {
+    "class": "delegate",
+    "reason": "threshold_met",
+    "taskType": "bulk_read",
+    "decision": "deny",
+    "lane": "bulkRead",
+    "mode": "bulk-reader",
+    "dispatchStatus": "ok",
+    "dispatchReason": "completed"
+  },
+  "qualityCriteria": {
+    "exactFacts": [
+      "x_137"
+    ],
+    "forbiddenTerms": [
+      "x_136",
+      "x_138",
+      "x_1137",
+      "x_013"
+    ],
+    "counts": [
+      {
+        "term": "deprecated",
+        "min": 1,
+        "max": 4
+      }
+    ]
+  }
+}

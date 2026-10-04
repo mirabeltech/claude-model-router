@@ -1,0 +1,355 @@
+/**
+ * Architectural rules, turned into gating checks.
+ *
+ * Every assertion here exists because the rule it enforces is stated in prose somewhere and prose
+ * does not fail CI. A purity rule that is only a comment is a purity rule that will be broken by
+ * a well-meaning import six months from now.
+ */
+
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
+
+import { ROUTER_VERSION, SCHEMA_VERSION, CALC_VERSION, FIELD_ORDER, REQUIRED_FIELDS } from '../plugins/model-router/lib/telemetry/record.mjs'
+import { REPO_ROOT } from './helpers/telemetry-dir.mjs'
+
+const LIB_DIR = path.join(REPO_ROOT, 'plugins', 'model-router', 'lib')
+const TELEMETRY_DIR = path.join(LIB_DIR, 'telemetry')
+
+const read = (file) => fs.readFileSync(path.join(TELEMETRY_DIR, file), 'utf8')
+const telemetryFiles = () => fs.readdirSync(TELEMETRY_DIR).filter((f) => f.endsWith('.mjs'))
+
+/** Source with comments removed, so a MENTION of something is never counted as a USE of it. */
+function stripComments(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1')
+}
+
+/** Every `from '...'` specifier in a source file. */
+function importsOf(source) {
+  return [...source.matchAll(/(?:^|\n)\s*(?:import|export)[^\n]*?from\s+'([^']+)'/g)].map((m) => m[1])
+}
+
+/* --------------------------------------------------------------- purity */
+
+/**
+ * The math and aggregation layers must be pure. The task requirement is explicit: no filesystem,
+ * network, logging or telemetry dependency. A `node:` import is the cheapest possible proxy for
+ * all four, and it is exact rather than approximate.
+ */
+const PURE_MODULES = ['calc.mjs', 'pricing-lookup.mjs', 'validate.mjs', 'aggregate.mjs', 'record.mjs']
+
+for (const file of PURE_MODULES) {
+  test(`${file} is pure — it imports no node builtin at all`, () => {
+    const source = read(file)
+    const builtins = importsOf(source).filter((s) => s.startsWith('node:'))
+    assert.deepEqual(builtins, [], `${file} imports ${builtins.join(', ')}`)
+    // Catch a dynamic require or import that the specifier scan would miss.
+    assert.equal(/require\(/.test(source), false, `${file} must not use require`)
+    assert.equal(/import\(\s*['"]node:/.test(source), false, `${file} must not dynamically import a builtin`)
+  })
+
+  test(`${file} reaches only other pure modules`, () => {
+    const local = importsOf(read(file)).filter((s) => s.startsWith('.'))
+    for (const spec of local) {
+      const target = path.basename(spec)
+      assert.ok(PURE_MODULES.includes(target), `${file} imports ${spec}, which is not a pure module`)
+    }
+  })
+}
+
+test('the aggregation layer never imports the math layer, so it cannot reprice a stored row', () => {
+  // Cost is computed once at write time and stamped with its pricing and calc version.
+  // Re-pricing history against today's table would produce a number for a bill nobody was sent.
+  const local = importsOf(read('aggregate.mjs'))
+  assert.equal(local.includes('./calc.mjs'), false)
+  assert.equal(local.some((s) => s.includes('pricing')), false)
+})
+
+/* ------------------------------------------------------- dependency direction */
+
+/**
+ * Every module of the routing layer, by basename. A LIST rather than a regex on purpose: the
+ * previous `/routing\.mjs$/` form would silently stop matching the moment a second routing module
+ * appeared, and a guard that narrows without failing is worse than no guard at all.
+ */
+const ROUTING_LAYER = ['routing.mjs', 'routing-policy.mjs', 'globs.mjs']
+
+test('nothing in the telemetry layer imports the routing layer', () => {
+  for (const file of telemetryFiles()) {
+    const local = importsOf(read(file))
+    for (const spec of local) {
+      assert.equal(ROUTING_LAYER.includes(path.basename(spec)), false, `${file} imports ${spec}`)
+      assert.equal(/routing/.test(spec), false, `${file} imports ${spec}`)
+    }
+  }
+})
+
+test('the routing layer is pure — no builtin, no clock, no randomness, no process, no I/O', () => {
+  // The determinism claim in docs/routing.md is only as good as this check. A `node:` import is
+  // the cheapest exact proxy for filesystem, network and child_process all at once; Date and
+  // Math.random are what would make the same input decide differently on a second run.
+  for (const file of ROUTING_LAYER) {
+    const source = fs.readFileSync(path.join(LIB_DIR, file), 'utf8')
+    const builtins = importsOf(source).filter((spec) => spec.startsWith('node:'))
+    assert.deepEqual(builtins, [], `${file} imports ${builtins.join(', ')}`)
+    assert.equal(/require\(/.test(source), false, `${file} must not use require`)
+    assert.equal(/import\(/.test(source), false, `${file} must not import dynamically`)
+    for (const forbidden of [/\bnew Date\b/, /\bDate\.now\b/, /\bMath\.random\b/, /\bprocess\./, /\bfetch\(/, /\bperformance\./]) {
+      assert.equal(forbidden.test(source), false, `${file} references ${forbidden}`)
+    }
+  }
+})
+
+test('the routing layer reaches only other routing modules', () => {
+  // It must not import a provider (CLAUDE.md's second non-negotiable), the telemetry sink, or
+  // config.mjs — the resolved config arrives as an argument, which is what keeps decide() pure.
+  for (const file of ROUTING_LAYER) {
+    const source = fs.readFileSync(path.join(LIB_DIR, file), 'utf8')
+    for (const spec of importsOf(source).filter((x) => x.startsWith('.'))) {
+      assert.ok(ROUTING_LAYER.includes(path.basename(spec)), `${file} imports ${spec}, outside the routing layer`)
+    }
+  }
+})
+
+/**
+ * The dispatch layer, by exact specifier rather than by basename.
+ *
+ * `dispatch/index.mjs` and `dispatch/contract.mjs` collide by basename with the telemetry and
+ * provider files of the same names, so a basename allowlist would quietly accept
+ * `'../telemetry/contract.mjs'` as "a contract.mjs" — exactly the silently-narrowing guard the
+ * ROUTING_LAYER comment above warns about.
+ *
+ * It is in NEITHER of the lists above, on purpose: it imports providers, so it is not pure, and
+ * it reads a clock, so it is not the routing layer. A half-true purity list is worse than none.
+ */
+const DISPATCH_DIR = path.join(LIB_DIR, 'dispatch')
+const DISPATCH_LAYER = ['contract.mjs', 'index.mjs', 'modes.mjs', 'task.mjs']
+const DISPATCH_ALLOWED_IMPORTS = [
+  './contract.mjs',
+  './modes.mjs',
+  './task.mjs',
+  '../redact.mjs',
+  '../routing-policy.mjs',
+  '../providers/contract.mjs',
+  '../providers/index.mjs',
+  // Both are PURE and import-free, so neither widens what the dispatch layer can reach: they add
+  // arithmetic and a data shape, not a capability. capability.mjs sits under providers/ because a
+  // capability record describes a provider's model; context-budget.mjs sits beside config.mjs and
+  // routing.mjs as a third pure module because the gate must be able to reason about a window
+  // without importing a provider.
+  '../providers/capability.mjs',
+  '../context-budget.mjs',
+]
+
+const dispatchSource = (file) => fs.readFileSync(path.join(DISPATCH_DIR, file), 'utf8')
+
+test('the dispatch layer holds exactly the files the architecture rules below cover', () => {
+  // A new file added to the directory must be classified deliberately, not inherit silence.
+  const onDisk = fs.readdirSync(DISPATCH_DIR).filter((f) => f.endsWith('.mjs')).sort()
+  assert.deepEqual(onDisk, [...DISPATCH_LAYER].sort())
+})
+
+test('the dispatch layer imports no node builtin — it has no filesystem and no child process', () => {
+  // The security claim in docs/worker-dispatch.md is only as good as this check. The layer
+  // RECEIVES file content; a worker that could name its own inputs would turn a gated read into
+  // an ungated one, and `node:fs` is the cheapest exact proxy for that capability.
+  for (const file of DISPATCH_LAYER) {
+    const source = dispatchSource(file)
+    const builtins = importsOf(source).filter((spec) => spec.startsWith('node:'))
+    assert.deepEqual(builtins, [], `dispatch/${file} imports ${builtins.join(', ')}`)
+    // Comments are stripped before the call checks: a JSDoc `{import('./x.mjs').T}` names a
+    // type and loads nothing, so counting it would force the layer to drop its annotations.
+    const code = stripComments(source)
+    assert.equal(/require\(/.test(code), false, `dispatch/${file} must not use require`)
+    assert.equal(/import\(/.test(code), false, `dispatch/${file} must not import dynamically`)
+  }
+})
+
+test('the dispatch layer reaches only the modules it is allowed to reach', () => {
+  for (const file of DISPATCH_LAYER) {
+    for (const spec of importsOf(dispatchSource(file)).filter((x) => x.startsWith('.'))) {
+      assert.ok(
+        DISPATCH_ALLOWED_IMPORTS.includes(spec),
+        `dispatch/${file} imports ${spec}, which is not on the allowlist`,
+      )
+    }
+  }
+})
+
+test('dispatch and telemetry do not import each other, in either direction', () => {
+  // The dispatcher returns the facts a later integration layer needs and stops there. Writing a
+  // row is that layer's decision, and a dispatcher coupled to the sink could not be called by
+  // anything that did not want one written.
+  for (const file of DISPATCH_LAYER) {
+    for (const spec of importsOf(dispatchSource(file))) {
+      assert.equal(/telemetry/.test(spec), false, `dispatch/${file} imports ${spec}`)
+    }
+  }
+  for (const file of telemetryFiles()) {
+    for (const spec of importsOf(read(file))) {
+      assert.equal(/dispatch/.test(spec), false, `telemetry/${file} imports ${spec}`)
+    }
+  }
+})
+
+test('the dispatch layer logs nothing, so a secret cannot reach a terminal through it', () => {
+  // Comments are stripped first, so a mention in a docstring is not a violation.
+  for (const file of DISPATCH_LAYER) {
+    const code = stripComments(dispatchSource(file))
+    assert.equal(/console\./.test(code), false, `dispatch/${file} writes to the console`)
+    assert.equal(/process\.std(out|err)/.test(code), false, `dispatch/${file} writes to a stream`)
+  }
+})
+
+test('the routing layer does not import the dispatcher — the dependency runs one way only', () => {
+  // decide() must stay a pure function that executes nothing, so dispatch depends on routing and
+  // never the reverse.
+  for (const file of ROUTING_LAYER) {
+    const source = fs.readFileSync(path.join(LIB_DIR, file), 'utf8')
+    for (const spec of importsOf(source)) {
+      assert.equal(/dispatch/.test(spec), false, `${file} imports ${spec}`)
+    }
+  }
+})
+
+test('no provider module imports the dispatcher that drives it', () => {
+  const providersDir = path.join(LIB_DIR, 'providers')
+  for (const file of fs.readdirSync(providersDir).filter((f) => f.endsWith('.mjs'))) {
+    const source = fs.readFileSync(path.join(providersDir, file), 'utf8')
+    for (const spec of importsOf(source)) {
+      assert.equal(/dispatch/.test(spec), false, `providers/${file} imports ${spec}`)
+    }
+  }
+})
+
+test('no provider module imports telemetry — the dependency runs one way only', () => {
+  const providersDir = path.join(REPO_ROOT, 'plugins', 'model-router', 'lib', 'providers')
+  for (const file of fs.readdirSync(providersDir).filter((f) => f.endsWith('.mjs'))) {
+    const source = fs.readFileSync(path.join(providersDir, file), 'utf8')
+    for (const spec of importsOf(source)) {
+      assert.equal(/telemetry/.test(spec), false, `providers/${file} imports ${spec}`)
+    }
+  }
+})
+
+test('the telemetry layer does not reach the provider layer at all', () => {
+  // It used to, for one string function. redactSecrets now lives in lib/redact.mjs, which both
+  // layers depend on, so neither depends on the other. A shared helper is still shared — a second
+  // copy of a secret-scrubbing regex set is a second copy that can fall behind — but borrowing it
+  // no longer costs a dependency edge that will one day carry something heavier.
+  const reaching = []
+  for (const file of telemetryFiles()) {
+    for (const spec of importsOf(read(file))) {
+      if (spec.includes('providers/')) reaching.push(`${file} -> ${spec}`)
+    }
+  }
+  assert.deepEqual(reaching, [])
+})
+
+test('the shared redaction helper depends on nothing, so either layer can borrow it safely', () => {
+  const source = fs.readFileSync(path.join(LIB_DIR, 'redact.mjs'), 'utf8')
+  assert.deepEqual(importsOf(source), [])
+  assert.equal(/require\(/.test(source), false)
+})
+
+test('the dashboard plugin does not import router code', () => {
+  const dashboard = path.join(REPO_ROOT, 'plugins', 'router-dashboard')
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        walk(full)
+      } else if (entry.name.endsWith('.mjs')) {
+        for (const spec of importsOf(fs.readFileSync(full, 'utf8'))) {
+          assert.equal(/model-router/.test(spec), false, `${full} imports ${spec}`)
+        }
+      }
+    }
+  }
+  walk(dashboard)
+})
+
+/* ------------------------------------------------- the env side channel */
+
+test('CLAUDE_ROUTER_TELEMETRY is read in exactly one place', () => {
+  // It is a documented session kill switch with no SPEC entry, so reading process.env directly
+  // is sanctioned — but an undeclared side channel with several readers will drift.
+  const hits = []
+  const roots = [
+    path.join(REPO_ROOT, 'plugins', 'model-router', 'lib'),
+    path.join(REPO_ROOT, 'plugins', 'model-router', 'scripts'),
+  ]
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) walk(full)
+      else if (entry.name.endsWith('.mjs')) {
+        // Comments are stripped first, so a code READ is counted but a MENTION is not:
+        // config.mjs documents the switch in a docstring, which is exactly where the
+        // explanation belongs and is not a second reader.
+        const code = fs
+          .readFileSync(full, 'utf8')
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/(^|[^:])\/\/[^\n]*/g, '$1')
+        if (code.includes('CLAUDE_ROUTER_TELEMETRY')) hits.push(path.relative(REPO_ROOT, full))
+      }
+    }
+  }
+  roots.forEach(walk)
+  assert.deepEqual(hits, [path.join('plugins', 'model-router', 'lib', 'telemetry', 'index.mjs')])
+})
+
+test('no telemetry setting that has a SPEC entry is read from process.env directly', () => {
+  // The layering is tested in config.mjs; a second reader would bypass it.
+  for (const file of telemetryFiles()) {
+    const source = read(file)
+    const envReads = [...source.matchAll(/env\.(CMR_[A-Z0-9_]+)/g)].map((m) => m[1])
+    assert.deepEqual(envReads, [], `${file} reads ${envReads.join(', ')} directly`)
+  }
+})
+
+/* --------------------------------------------------------------- the stamps */
+
+test('the stamped router version matches the plugin manifest', () => {
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(REPO_ROOT, 'plugins', 'model-router', '.claude-plugin', 'plugin.json'), 'utf8'),
+  )
+  assert.equal(ROUTER_VERSION, manifest.version, 'record.mjs ROUTER_VERSION is stale')
+})
+
+test('the schema and calc versions are positive integers', () => {
+  for (const v of [SCHEMA_VERSION, CALC_VERSION]) {
+    assert.ok(Number.isInteger(v) && v > 0)
+  }
+})
+
+test('the field order has no duplicates and every required field is declared', () => {
+  assert.equal(new Set(FIELD_ORDER).size, FIELD_ORDER.length, 'duplicate field in FIELD_ORDER')
+  for (const f of REQUIRED_FIELDS) assert.ok(FIELD_ORDER.includes(f), `${f} is required but not declared`)
+})
+
+test('every field the task specification named is present in the schema', () => {
+  // The contract the caller asked for, pinned so a refactor cannot quietly drop a column.
+  const required = [
+    'schema_version', 'event_id', 'timestamp', 'session_id', 'project_id', 'project_path',
+    'task_id', 'task_type', 'routing_decision', 'routing_reason', 'provider', 'model',
+    'worker_input_tokens', 'worker_output_tokens', 'worker_cached_input_tokens',
+    'worker_thought_tokens', 'worker_total_tokens',
+    'primary_input_tokens', 'primary_output_tokens', 'primary_total_tokens',
+    'worker_input_cost', 'worker_output_cost', 'worker_total_cost',
+    'primary_input_cost', 'primary_output_cost', 'primary_total_cost',
+    'estimated_cost_avoided', 'estimated_net_savings',
+    'files_count', 'input_bytes', 'estimated_input_tokens', 'latency_ms',
+    'status', 'error_code', 'error_message_safe',
+  ]
+  for (const f of required) assert.ok(FIELD_ORDER.includes(f), `${f} is missing from the schema`)
+})
+
+test('every monetary field has a measurement status beside it', () => {
+  const money = FIELD_ORDER.filter((f) => /_cost$|^estimated_cost_avoided$|^estimated_net_savings$/.test(f))
+  assert.ok(money.length >= 9)
+  for (const f of money) {
+    assert.ok(FIELD_ORDER.includes(`${f}_status`), `${f} has no ${f}_status`)
+  }
+})
