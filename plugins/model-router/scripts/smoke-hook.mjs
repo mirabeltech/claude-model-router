@@ -161,9 +161,15 @@ if (provider !== 'gemini') env.CMR_WORKER_API_KEY_ENV = null
 if (scenario === 'context-exceeded') {
   // A window far smaller than the file. Discovery is turned OFF, or the daemon's real answer
   // would override the configured number and the request would fit after all.
-  env.CMR_OLLAMA_CONTEXT_TOKENS = opt('context-tokens', '256')
+  //
+  // The value is held in a local rather than read back out of `env`: `env.CMR_*` on the
+  // right-hand side is a READ of a SPEC variable outside the loader, which
+  // test/env.inventory.test.mjs forbids — and rightly, since that is how a second reader of a
+  // setting comes to exist. Writing one for a child process is fine; reading one is not.
+  const contextTokens = opt('context-tokens', '256')
+  env.CMR_OLLAMA_CONTEXT_TOKENS = contextTokens
   env.CMR_OLLAMA_DISCOVER_CONTEXT = '0'
-  console.log(`  NOTE:     context window pinned to ${env.CMR_OLLAMA_CONTEXT_TOKENS} tokens; discovery disabled`)
+  console.log(`  NOTE:     context window pinned to ${contextTokens} tokens; discovery disabled`)
   console.log('')
 }
 if (scenario === 'unavailable') {
