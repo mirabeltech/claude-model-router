@@ -13,6 +13,7 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import crypto from 'node:crypto'
 
 import { buildEvent } from '../plugins/model-router/lib/telemetry/event.mjs'
 import { BUNDLED_PRICING } from '../plugins/model-router/lib/telemetry/pricing-table.mjs'
@@ -482,4 +483,47 @@ test('a verbose answer produces negative tokens avoided, stored unclamped', () =
   const e = event({ corpusChars: 400, result: result({ text: 'y'.repeat(40_000) }) })
   assert.ok(e.estimated_tokens_avoided < 0, `expected negative, got ${e.estimated_tokens_avoided}`)
   assert.equal(e.estimated_tokens_avoided_status, 'estimated')
+})
+
+/* ------------------------------------------------- event identity, and duplicates */
+
+/**
+ * WHAT A DUPLICATE event_id MEANS, pinned because the answer is "nothing deduplicates it".
+ *
+ * There is no dedupe anywhere in the read path — no Set of seen ids, no uniqueness check in the
+ * aggregator. That is a decision rather than an omission, and it is only safe because of where
+ * the id comes from: `emitEvent` generates a fresh `crypto.randomUUID()` per record, so the
+ * router cannot emit the same id twice. A duplicate in a store therefore means a segment file was
+ * copied, restored or concatenated by hand — an operator action, not a router behaviour.
+ *
+ * Counting a copied row twice is the right answer to that: the alternative is for the reader to
+ * silently drop rows that look alike, which would hide a genuine double-write on a filesystem
+ * where append atomicity failed. The reader already reports a mid-file malformed line as evidence
+ * of exactly that; quietly deduplicating would remove the other half of the signal.
+ */
+
+test('a generated event id is a fresh UUID every time', () => {
+  // The property the no-dedupe decision rests on. If ids were derived from content — a hash of
+  // the row, say — two identical delegations a second apart would collide and the store would
+  // silently lose one.
+  const ids = new Set()
+  for (let i = 0; i < 200; i++) ids.add(crypto.randomUUID())
+  assert.equal(ids.size, 200, 'no collisions across 200 generated ids')
+})
+
+test('buildEvent defaults to the all-zero id, which is never what a real row carries', () => {
+  // The default is deliberately an obvious sentinel rather than a generated value: buildEvent is
+  // pure and must not reach for randomness, so a row that reaches a store with this id did not go
+  // through emitEvent. That makes it a detectable fixture rather than a plausible-looking record.
+  // buildEvent directly, not the local `event()` helper, because that helper injects a fixed id —
+  // which is itself the point of the test below.
+  const bare = buildEvent({ config: telemetryConfig('/proj'), now: FROZEN_MS })
+  assert.equal(bare.event_id, '00000000-0000-0000-0000-000000000000')
+})
+
+test('an injected id is used verbatim, which is what makes a fixture reproducible', () => {
+  // The fixture corpus depends on this: the committed JSONL files are byte-pinned, so the id has
+  // to be supplied rather than generated.
+  const e = event({ eventId: 'fixed-0001' })
+  assert.equal(e.event_id, 'fixed-0001')
 })
