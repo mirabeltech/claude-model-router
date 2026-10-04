@@ -14,6 +14,23 @@
  *   node plugins/model-router/scripts/smoke-hook.mjs --model mistral:latest
  *   node plugins/model-router/scripts/smoke-hook.mjs --provider gemini --model gemini-2.5-flash
  *   node plugins/model-router/scripts/smoke-hook.mjs --file path/to/big-file.ts
+ *   node plugins/model-router/scripts/smoke-hook.mjs --scenario context-exceeded
+ *   node plugins/model-router/scripts/smoke-hook.mjs --scenario unavailable
+ *
+ * `--scenario` exists because a smoke test that only ever exercises the happy path proves the
+ * thinnest half of the contract. Against a real worker the interesting questions are what happens
+ * when the prompt does NOT fit and when the daemon is NOT there, and both are cheap to arrange:
+ *
+ *   delegate          the default. A real delegation, a real answer.
+ *   context-exceeded  configures a tiny context window, so the request is REFUSED before any
+ *                     request is sent. This is the Ollama middle-drop defence, live: the model
+ *                     would otherwise be handed a truncated prompt and answer it confidently.
+ *   unavailable       points the provider at a port nothing is listening on, so the call fails and
+ *                     the hook falls open. A worker that is down must cost the developer nothing.
+ *
+ * A scenario reports PASS when the router did the right thing for that scenario, which for two of
+ * the three means NOT delegating. So `--scenario context-exceeded` exiting 0 is a refusal working,
+ * not a delegation.
  *
  * On a CPU-only machine a local model can take minutes to read tens of kilobytes, which proves
  * something about the hardware rather than about the hook. `--min-bytes` lowers the gate's size
@@ -41,6 +58,29 @@ const opt = (name, dflt) => {
   const i = argv.indexOf(`--${name}`)
   return i === -1 || !argv[i + 1] || argv[i + 1].startsWith('--') ? dflt : argv[i + 1]
 }
+
+const SCENARIOS = Object.freeze(['delegate', 'context-exceeded', 'unavailable'])
+const scenario = opt('scenario', 'delegate')
+if (!SCENARIOS.includes(scenario)) {
+  console.error(`unknown --scenario ${scenario}; expected one of ${SCENARIOS.join(', ')}`)
+  process.exit(2)
+}
+
+/**
+ * What each scenario must produce to count as a pass.
+ *
+ * `null` means "a delegation", so the default scenario keeps the original contract: exit 0 only if
+ * a real summary came back. For the other two the pass condition is a specific REFUSAL, named by
+ * its error code — a scenario that fell open for some unrelated reason has not demonstrated the
+ * thing it was set up to demonstrate, and must not be allowed to look like a pass.
+ */
+const EXPECTED_ERROR = Object.freeze({
+  delegate: null,
+  'context-exceeded': ['context_exceeded'],
+  // `transport` is a refused connection. `timeout` and `aborted` are accepted too, because a
+  // firewall that blackholes rather than refusing turns the same condition into a hang.
+  unavailable: ['transport', 'timeout', 'aborted'],
+})
 
 const provider = opt('provider', 'ollama')
 // Defaults to the SAME model as `providers.ollama.model`, deliberately. These disagreed
@@ -86,6 +126,7 @@ const payload = JSON.stringify({
 
 const bytes = fs.statSync(file).size
 console.log(`hook smoke test`)
+console.log(`  scenario: ${scenario}${scenario === 'delegate' ? '' : '  <-- a REFUSAL or a FALL-OPEN is the pass condition here'}`)
 console.log(`  worker:   ${provider}${model ? `/${model}` : ''}`)
 console.log(`  file:     ${path.relative(REPO_ROOT, file)} (${bytes} bytes)`)
 console.log(`  store:    ${scratch}`)
@@ -117,6 +158,26 @@ if (minBytes !== null) {
 // readiness only forwards it for a provider whose capabilities ask for a key.
 if (provider !== 'gemini') env.CMR_WORKER_API_KEY_ENV = null
 
+if (scenario === 'context-exceeded') {
+  // A window far smaller than the file. Discovery is turned OFF, or the daemon's real answer
+  // would override the configured number and the request would fit after all.
+  env.CMR_OLLAMA_CONTEXT_TOKENS = opt('context-tokens', '256')
+  env.CMR_OLLAMA_DISCOVER_CONTEXT = '0'
+  console.log(`  NOTE:     context window pinned to ${env.CMR_OLLAMA_CONTEXT_TOKENS} tokens; discovery disabled`)
+  console.log('')
+}
+if (scenario === 'unavailable') {
+  // A port nothing is listening on. Not a fake provider — the real Ollama module, a real socket,
+  // a real connection refusal, which is what a stopped daemon actually looks like.
+  env.CMR_OLLAMA_BASE_URL = 'http://127.0.0.1:1'
+  env.CMR_OLLAMA_DISCOVER_CONTEXT = '0'
+  env.CMR_HOOK_TIMEOUT_MS = '8000'
+  env.CMR_WORKER_TIMEOUT_MS = '8000'
+  env.CMR_WORKER_MAX_RETRIES = '0'
+  console.log('  NOTE:     provider pointed at 127.0.0.1:1, where nothing is listening')
+  console.log('')
+}
+
 const started = Date.now()
 const child = spawn(process.execPath, [path.join(PLUGIN_ROOT, 'hooks', 'pre-tool-use.mjs')], {
   env,
@@ -140,12 +201,32 @@ child.on('close', (code) => {
   if (stdout === '') {
     console.log('')
     console.log('  RESULT: the hook fell open — the Read would proceed normally.')
-    if (rows.length > 0) {
-      const row = rows[rows.length - 1]
+    const row = rows.length > 0 ? rows[rows.length - 1] : null
+    if (row !== null) {
       console.log(`  gate:     ${row.routing_decision} / ${row.routing_reason}`)
       console.log(`  status:   ${row.status}${row.error_code ? ` (${row.error_code})` : ''}`)
+      // NO FALSE WORKER USAGE on a path that produced none. Reported here rather than left to the
+      // reader, because this is the whole reason a refusal is safe to record at all.
+      console.log(`  usage:    in=${row.worker_input_tokens} out=${row.worker_output_tokens}  (null means nothing was measured)`)
     } else {
       console.log('  no telemetry row was written, so the hook stopped before reaching the gate.')
+    }
+
+    // THE EXIT CODE IS SCENARIO-AWARE. For `context-exceeded` and `unavailable` a fall-open IS the
+    // pass condition, so reporting failure would invert the result — and a smoke test that exits 1
+    // when the router behaved correctly is a smoke test nobody can put in a pipeline.
+    const expected = EXPECTED_ERROR[scenario]
+    if (expected !== null) {
+      const got = row?.error_code ?? null
+      const ok = expected.includes(got)
+      console.log('')
+      console.log(
+        ok
+          ? `  PASS: scenario "${scenario}" expected one of [${expected.join(', ')}] and got ${got}.`
+          : `  FAIL: scenario "${scenario}" expected one of [${expected.join(', ')}] but got ${got}.`,
+      )
+      cleanup()
+      process.exit(ok ? 0 : 1)
     }
     cleanup()
     process.exit(1)
@@ -186,6 +267,14 @@ child.on('close', (code) => {
   console.log('')
   console.log(good ? '  RESULT: delegated, and a real summary came back.' : '  RESULT: the response was not a usable delegation.')
   cleanup()
+  // A delegation happened. For a scenario that expected a refusal that is a FAILURE, however
+  // healthy the answer looks: a context window of 256 tokens must not produce a summary.
+  const expected = EXPECTED_ERROR[scenario]
+  if (expected !== null) {
+    console.log('')
+    console.log(`  FAIL: scenario "${scenario}" expected a refusal (${expected.join(' or ')}) but the read was delegated.`)
+    process.exit(1)
+  }
   process.exit(good ? 0 : 1)
 })
 
