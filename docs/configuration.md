@@ -137,7 +137,7 @@ npm run budget               # the limits and the current UTC period's spend
 
 <!-- generated: everything below this line comes from SPEC. Do not edit by hand. -->
 
-Generated from `SPEC` in `plugins/model-router/lib/config.mjs`. 77 settings,
+Generated from `SPEC` in `plugins/model-router/lib/config.mjs`. 80 settings,
 config version 1. Regenerate with `npm run docs:config`; CI fails on a stale file.
 
 ### Master switch
@@ -220,6 +220,16 @@ The Claude Code adapter, and what it is allowed to send.
 | `hooks.timeoutMs` | int | `20000` | min 1000, max 120000 | `CMR_HOOK_TIMEOUT_MS` | The hook's own deadline for a delegated read, which is not the worker's. Past it the hook abandons the worker call and falls open to the original Read, so an interactive read is never blocked for longer than this. |
 | `hooks.taskIntent.source` | enum | `"none"` | `none`, `transcript` | `CMR_TASK_INTENT_SOURCE` | Where the worker's task comes from. 'none' sends a fixed generic task and is the default. 'transcript' recovers the newest prompt from the session transcript the hook is already given, so the worker is told what is actually being looked for — which also means your prompt text is sent to the worker model. Opt in deliberately. |
 | `hooks.taskIntent.maxChars` | int | `600` | min 0, max 4000 | `CMR_TASK_INTENT_MAX_CHARS` | Ceiling on how much recovered prompt text may be sent to the worker. Longer intent is truncated, never dropped. |
+
+### Answer verification
+
+Checking the worker answer against the file it summarised, before that answer replaces the file in Claude context. Deterministic and on by default: a wrong summary is the one failure a developer cannot see, and the file is still in hand. A false positive costs one wasted worker call; a false negative poisons the context.
+
+| Setting | Type | Default | Range | Env var | Meaning |
+| --- | --- | --- | --- | --- | --- |
+| `verify.enabled` | bool | `true` | — | `CMR_VERIFY_ENABLED` | Check the worker answer against the file it summarised before that answer replaces the file in Claude context. Deterministic: line references, quoted literals and backticked identifiers are verified against the bytes. |
+| `verify.onSuspect` | enum | `"discard"` | `discard`, `warn`, `off` | `CMR_VERIFY_ON_SUSPECT` | discard falls open to the real Read when a claim cannot be confirmed; warn substitutes the summary and appends a caveat naming what failed; off records the verdict and acts on nothing. |
+| `verify.maxUngroundedIdentifierRatio` | number | `0.25` | min 0, max 1 | `CMR_VERIFY_MAX_UNGROUNDED_RATIO` | Share of backticked identifiers that may be absent from the file before the answer is suspect. A wrong line reference or an invented string literal is enough on its own. |
 
 ### Governance
 

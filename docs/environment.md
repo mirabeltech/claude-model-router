@@ -8,7 +8,7 @@ document cannot quietly fall behind the code.
 
 ## Settings
 
-76 variables, one per setting, generated from `SPEC` (config version 1).
+79 variables, one per setting, generated from `SPEC` (config version 1).
 Each overrides the matching setting from a config file, and is itself overridden only by a plugin
 option. This is how CI pins behaviour and how the kill switches work. What each setting MEANS is in
 [configuration.md](configuration.md); this table is the variable name, the type and the default.
@@ -54,6 +54,9 @@ option. This is how CI pins behaviour and how the kill switches work. What each 
 | `CMR_HOOK_TIMEOUT_MS` | `hooks.timeoutMs` | int | `20000` | no |
 | `CMR_TASK_INTENT_SOURCE` | `hooks.taskIntent.source` | enum | `"none"` | no |
 | `CMR_TASK_INTENT_MAX_CHARS` | `hooks.taskIntent.maxChars` | int | `600` | no |
+| `CMR_VERIFY_ENABLED` | `verify.enabled` | bool | `true` | no |
+| `CMR_VERIFY_ON_SUSPECT` | `verify.onSuspect` | enum | `"discard"` | no |
+| `CMR_VERIFY_MAX_UNGROUNDED_RATIO` | `verify.maxUngroundedIdentifierRatio` | number | `0.25` | no |
 | `CMR_BUDGET_ENABLED` | `budget.enabled` | bool | `true` | no |
 | `CMR_RUN_BUDGET_USD` | `budget.run.maxWorkerCostUsd` | number | `null` | no |
 | `CMR_RUN_MAX_INPUT_TOKENS` | `budget.run.maxInputTokens` | int | `null` | no |

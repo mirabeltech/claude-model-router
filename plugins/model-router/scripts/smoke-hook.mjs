@@ -261,6 +261,15 @@ child.on('close', (code) => {
     const row = rows[rows.length - 1]
     console.log('')
     console.log(`  row:      task_type=${row.task_type} status=${row.status} provider=${row.provider} model=${row.model}`)
+    // The verification verdict, because a summary that was substituted WITHOUT its claims
+    // checking out is the one outcome an operator most needs to see on a live run.
+    console.log(
+      `  verified: ${row.summary_verify_verdict ?? 'not checked'}` +
+        (row.summary_line_claims === null
+          ? ''
+          : `  (${row.summary_line_claims - row.summary_line_claims_wrong}/${row.summary_line_claims} line references confirmed)`) +
+        (row.summary_verify_reason === null ? '' : `  ${row.summary_verify_reason}`),
+    )
     console.log(`  gate:     ${row.routing_decision} / ${row.routing_reason} (policy v${row.routing_policy_version})`)
     console.log(`  request:  intent=${row.task_intent_source} prompt v${row.prompt_version}`)
     console.log(`  usage:    in=${fmt(row.worker_input_tokens)} out=${fmt(row.worker_output_tokens)} source=${row.worker_usage_source}`)

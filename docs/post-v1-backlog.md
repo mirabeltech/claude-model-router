@@ -170,7 +170,11 @@ number with nothing to compare it to.
 (The empty `test/behavioural/` directory was removed in phase 12. An empty directory documented as
 holding cases is worse than its absence.)
 
-### 13. A per-answer grounding check, with its false-positive rate measured first
+### 13. A SEMANTIC grader, for what claim verification structurally cannot reach
+
+**Partly shipped.** Deterministic claim verification now runs on every delegated answer and
+discards one whose claims contradict the file — see
+[summary-verification.md](summary-verification.md). What follows is what that cannot reach.
 
 `test/evals/evaluators.mjs` already has the machinery: `codePositionTokens()` extracts
 identifier-shaped tokens from code position only — inside backticks or quotes, camelCase,

@@ -235,21 +235,27 @@ export function toRoutingInput({ payload, facts = {}, env = {} }) {
  *
  * @returns {object|null} null when there is no answer worth substituting, which falls open
  */
-export function buildDelegatedResponse({ text, provider = null, model = null }) {
+export function buildDelegatedResponse({ text, provider = null, model = null, caveat = null }) {
   if (!isNonEmptyString(text)) return null
 
   const worker = [provider, model].filter(isNonEmptyString).join('/') || 'a worker model'
+
+  const reason = [
+    `This file was not read directly: model-router delegated it to ${worker} to keep its full`,
+    'contents out of your context. A summary of the whole file has been added to your context',
+    'instead. Do not repeat this Read. If you need exact bytes from a specific region, read it',
+    'again with offset and limit — a targeted read is never delegated.',
+  ]
+  // The caveat goes in the REASON, not in additionalContext: additionalContext is the worker's
+  // answer and nothing else should be mixed into it, or a later reader cannot tell which words
+  // came from the worker. Claude is the one consumer that can act on a caveat — it can re-read.
+  if (isNonEmptyString(caveat)) reason.push(caveat)
 
   return {
     hookSpecificOutput: {
       hookEventName: HOOK_EVENT,
       permissionDecision: 'deny',
-      permissionDecisionReason: [
-        `This file was not read directly: model-router delegated it to ${worker} to keep its full`,
-        'contents out of your context. A summary of the whole file has been added to your context',
-        'instead. Do not repeat this Read. If you need exact bytes from a specific region, read it',
-        'again with offset and limit — a targeted read is never delegated.',
-      ].join(' '),
+      permissionDecisionReason: reason.join(' '),
       additionalContext: text,
     },
   }

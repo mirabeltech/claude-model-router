@@ -45,12 +45,17 @@ import {
 } from './adapter.mjs'
 import { fileBytes, readTextContent, recentlyEdited, workerAvailability } from './facts.mjs'
 import { extractTaskIntent } from './intent.mjs'
+import { describeVerification, verifySummary } from '../verify/summary.mjs'
 import { toEventInputs } from './event.mjs'
 
 /** Every way this can end. Returned for tests and for the doctor's self-check, never printed. */
 export const OUTCOMES = Object.freeze([
   'hooks_disabled',
   'routing_disabled',
+  // The worker answered, and its claims about the file did not check out. The answer is thrown
+  // away and the developer gets the ordinary Read — see lib/verify/summary.mjs for why that is
+  // the cheap mistake rather than the expensive one.
+  'summary_unverified',
   'empty_stdin',
   'unparseable_stdin',
   'not_an_object',
@@ -137,11 +142,28 @@ export async function runReadHook({
     /** Write the row. Last thing on every path that reached a decision, and never load-bearing. */
     const record = (
       outcome,
-      { result = null, corpusChars = null, task = null, intentSource = null, governance = null } = {},
+      {
+        result = null,
+        corpusChars = null,
+        task = null,
+        intentSource = null,
+        governance = null,
+        verification = null,
+      } = {},
     ) => {
+      // A SUSPECT SUMMARY IS NOT SUBSTITUTED when the operator asked for `discard`: the response
+      // is null, which is the same fall-open every other failure path produces, and the developer
+      // gets their own Read. `warn` substitutes it and appends a caveat naming what failed.
+      const discarded = outcome === 'summary_unverified'
       const response =
-        result && result.status === 'ok'
-          ? buildDelegatedResponse({ text: result.text, provider: result.provider, model: result.model })
+        result && result.status === 'ok' && !discarded
+          ? buildDelegatedResponse({
+              text: result.text,
+              provider: result.provider,
+              model: result.model,
+              caveat:
+                config?.verify?.onSuspect === 'warn' ? describeVerification(verification) : null,
+            })
           : null
 
       let wrote = null
@@ -157,6 +179,7 @@ export async function runReadHook({
               facts,
               payload,
               corpusChars,
+              verification,
               // The task that was actually built, which is the generic literal unless the
               // developer opted in. Still governed by `telemetry.storeQuestionText`, which is
               // false by default, so recovered prompt text is not stored merely by being used.
@@ -334,13 +357,40 @@ export async function runReadHook({
       reservationStatus: settled.status === 'none' ? governance.reservationStatus : settled.status,
     })
 
+    /* ---- verification. The file is still in hand, so the answer's claims are checkable. ----
+     *
+     * This runs AFTER accounting, deliberately: the worker call happened and its tokens were
+     * really consumed, so it is charged whether or not we keep the answer. Discarding an answer
+     * does not un-spend it, and a row that hid the spend would understate what delegation costs.
+     *
+     * Wrapped, because a verifier that threw would break a hook — and CLAUDE.md's third rule
+     * does not care that this one is pure. A throw here must fall back to the pre-verification
+     * behaviour, which is to substitute the answer.
+     */
+    let verification = null
+    if (result.status === 'ok' && config?.verify?.enabled !== false) {
+      try {
+        verification = verifySummary({
+          answer: result.text,
+          files: [{ path: filePath, content: content.content }],
+          maxUngroundedRatio: config?.verify?.maxUngroundedIdentifierRatio ?? 0.25,
+        })
+      } catch {
+        verification = null
+      }
+    }
+
     const stamps = {
       corpusChars: content.content.length,
       task: input.task,
       intentSource,
       governance: accounted,
+      verification,
     }
     if (result.status !== 'ok') return record('worker_failed', { result, ...stamps })
+    if (verification?.verdict === 'suspect' && config?.verify?.onSuspect === 'discard') {
+      return record('summary_unverified', { result, ...stamps })
+    }
     return record('delegated', { result, ...stamps })
   } catch {
     return bail('hook_threw')

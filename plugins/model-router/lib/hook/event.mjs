@@ -69,6 +69,7 @@ export function toEventInputs({
   questionText = null,
   taskIntentSource = null,
   governance = null,
+  verification = null,
 }) {
   const dispatched = result !== null && result !== undefined
   const ok = dispatched && result.status === 'ok'
@@ -128,6 +129,9 @@ export function toEventInputs({
     returnedAnswerTokens: null,
 
     questionText,
+    // Only on a dispatched row. A gate refusal produced no answer, so there was nothing to
+    // verify, and stamping a verdict on it would invent a check that never happened.
+    verification: dispatched ? verification : null,
     primaryUsage: null,
     primaryUsageMethod: 'none',
 

@@ -130,6 +130,33 @@ export const DEFAULTS = Object.freeze({
     },
   },
 
+  // Verifying the worker's answer against the file it summarised, BEFORE the answer replaces that
+  // file in Claude's context.
+  //
+  // WHY THIS IS ON BY DEFAULT, when nearly nothing else in this project is. A wrong summary is the
+  // one failure the developer cannot see: the file never reaches Claude, so a fabrication is
+  // indistinguishable from a good summary until something built on it breaks. And the check is
+  // deterministic — we still have the file, so "`Record1` is on line 11" is simply true or false.
+  // It costs no network call, no model and no measurable time.
+  //
+  // THE ASYMMETRY IS WHAT JUSTIFIES `discard`. A false positive discards a good summary and the
+  // developer gets the ordinary `Read` they would have had anyway — one wasted worker call. A
+  // false negative puts an invented line number, symbol or literal into Claude's context and
+  // everything after it inherits the error. Those costs are not comparable, so the default favours
+  // the cheap mistake. See docs/summary-verification.md.
+  verify: {
+    enabled: true,
+    // `discard` falls open to the real Read. `warn` substitutes the summary anyway and appends a
+    // caveat naming what could not be confirmed — useful when a worker is known to be weak at
+    // line numbers but still worth reading. `off` records the verdict and acts on nothing.
+    onSuspect: 'discard',
+    // The share of backticked identifiers that may be absent from the file before the answer is
+    // suspect. A wrong line number or an invented string literal is enough on its own; identifiers
+    // get a ratio because a long answer legitimately names a library type or a concept from the
+    // task. 0 would make any such mention fatal.
+    maxUngroundedIdentifierRatio: 0.25,
+  },
+
   // Governance: how much worker usage is allowed, and what happens at the limit. Separate from
   // `routing`, which answers whether a task is APPROPRIATE to delegate, and from the capability
   // model, which answers whether the worker CAN run it. Three different questions.
@@ -303,6 +330,19 @@ export const SPEC = Object.freeze({
     values: ['none', 'transcript'],
   }),
   'hooks.taskIntent.maxChars': S('int', { env: 'CMR_TASK_INTENT_MAX_CHARS', min: 0, max: 4000 }),
+
+  // Answer verification. `enabled` ships true: a wrong summary is the one failure a developer
+  // cannot see, and the check is deterministic because the file is still in hand.
+  'verify.enabled': S('bool', { env: 'CMR_VERIFY_ENABLED' }),
+  'verify.onSuspect': S('enum', {
+    env: 'CMR_VERIFY_ON_SUSPECT',
+    values: ['discard', 'warn', 'off'],
+  }),
+  'verify.maxUngroundedIdentifierRatio': S('number', {
+    env: 'CMR_VERIFY_MAX_UNGROUNDED_RATIO',
+    min: 0,
+    max: 1,
+  }),
 
   // Governance. Every limit is `nullable` because `null` is the shipped default and means "no
   // configured limit" — a distinct state from `0`, which is a configured zero budget. `min: 0`

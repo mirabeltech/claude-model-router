@@ -108,6 +108,12 @@ const LEAVES = Object.freeze({
     'reasoned about without the record schema.',
   [`${ROUTER}/lib/analytics/window.mjs`]: 'calendar arithmetic over UTC half-open windows, testable against a frozen number. The whole ' +
     'analytics layer has no ambient clock, and this leaf is why it does not need one.',
+  [`${ROUTER}/lib/verify/summary.mjs`]:
+    'the answer verifier, and a LEAF on purpose. It is handed the worker answer and the file ' +
+    'content as strings and returns a verdict, so it imports nothing, opens nothing and cannot ' +
+    'reach a provider — which is what lets it sit on the hook hot path and be tested against a ' +
+    'real worker answer with no filesystem and no clock. It answers whether the claims in an ' +
+    'answer check out against the bytes; it never answers whether the answer is any good.',
   [`${ROUTER}/lib/hook/adapter.mjs`]:
     'the protocol translation. It imports NOTHING AT ALL, which is what lets it be tested against ' +
     'hostile host input with no graph behind it (hook.security.test.mjs:141).',

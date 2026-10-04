@@ -312,6 +312,12 @@ export function renderText(response, { color = true, verbose = false } = {}) {
   kv('discarded for truncation', metric(aq.discardedForTruncation), 'the defence working')
   kv('usage inconsistent', metric(aq.usageInconsistent), "provider arithmetic did not add up")
   line('')
+  line(`  ${c(DIM, 'claims checked against the file (line references, literals, identifiers)')}`)
+  kv('  claims check out', metric(aq.verified))
+  kv('  claims DO NOT check out', metric(aq.suspect), 'discarded, unless onSuspect is warn')
+  kv('  no checkable claim', metric(aq.noCheckableClaim), 'not a pass')
+  kv('  not checked', metric(aq.notChecked), 'verification did not run')
+  line('')
   line(`  ${c(DIM, 'established:     ' + aq.established)}`)
   line(`  ${c(DIM, 'NOT established: ' + aq.notEstablished)}`)
 

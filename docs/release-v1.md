@@ -177,12 +177,13 @@ promise. Ranked work for each is in [post-v1-backlog.md](post-v1-backlog.md).
 9. **`code-writer` is unreachable** and `routing.codeWrite.enforce` intercepts nothing.
 10. **Hook, governance and capability latency are not instrumented** and report `null` in a row,
     even though all three are now measured by harnesses.
-11. **There is no per-answer grounding check.** An advisory `no_invented_entities` evaluator exists
-    in the eval framework and was deliberately *not* promoted to runtime: its own documented
-    failure profile puts false positives at roughly one per five dispatch cases, from legitimate
-    composition and prose casing drift. A noisy detector rendered as a quality number is the same
-    overclaiming problem inverted. Backlog item 13 carries the sharpened design and its
-    precondition — measure the false-positive rate first.
+11. **Claim verification is a floor, not a grade.** A worker's summary is now checked against the
+    file before it replaces it — line references, quoted literals and backticked identifiers, all
+    exactly, with no model — and an answer that contradicts the file is discarded rather than
+    substituted (`verify.onSuspect: 'discard'`, shipped default). What it cannot catch:
+    recombination of real tokens into a false claim, declaration versus mere appearance, and
+    **omission** — an answer can pass every check and still leave out the thing that mattered. See
+    [summary-verification.md](summary-verification.md) §"What it cannot catch".
 
 ## 6. Live worker smoke-test status
 
@@ -231,6 +232,8 @@ quality was the single most misleading thing about it.
 **Not established, and not claimed.**
 
 - that a worker's answer is as good as Claude's, on any task
+- that a verified answer is *useful* — verification establishes only that it said nothing untrue
+  about the file, and a summary omitting the one relevant function passes every check
 - that intent-aware task construction improves quality — **or that it does not**
 - that workers preserve correctness
 - that the avoided-token figures match what Claude would actually have ingested

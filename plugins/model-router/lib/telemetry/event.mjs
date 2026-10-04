@@ -28,6 +28,7 @@ import {
   ROUTING_DECISIONS,
   ROUTING_REASONS,
   STATUS_VALUES,
+  SUMMARY_VERIFY_VERDICTS,
   TASK_INTENT_SOURCES,
   TASK_TYPES,
   USAGE_SOURCES,
@@ -155,6 +156,10 @@ export function buildEvent({
   returnedAnswerTokens = null,
 
   latencyMs = null,
+  // The answer-verification result, or null when verification did not run. See
+  // lib/verify/summary.mjs: null means "not checked", which is weaker than a `not_checkable`
+  // verdict and must not be confused with it.
+  verification = null,
   questionText = null,
 
   primaryUsage = null,
@@ -454,10 +459,30 @@ export function buildEvent({
     retry_count: toRetryCount(attempts ?? error?.attempts ?? null, warn),
     truncated: toBool(result?.truncated ?? null, 'truncated', warn),
     finish_reason: toText(result?.finishReason ?? null, 'finish_reason', warn),
+
     question_text: storedQuestion,
     truncation_steps: null,
     validation_warnings: warn.count,
     validation_codes: warn.serialize(),
+    // Verification. `verification === null` means it did not run, and every column stays null —
+    // never 0, which would read as "zero line claims were wrong" about a check nobody performed.
+    summary_verify_verdict: toEnum(
+      verification?.verdict ?? null,
+      'summary_verify_verdict',
+      SUMMARY_VERIFY_VERDICTS,
+      warn,
+    ),
+    summary_verify_reason: toText(verification?.reason ?? null, 'summary_verify_reason', warn),
+    summary_line_claims: toReportedCount(
+      verification?.lineClaims?.total ?? null,
+      'summary_line_claims',
+      warn,
+    ),
+    summary_line_claims_wrong: toReportedCount(
+      verification?.lineClaims?.wrong ?? null,
+      'summary_line_claims_wrong',
+      warn,
+    ),
 
     // Coerced ABOVE, not here. Two constraints pull in opposite directions and this satisfies
     // both: the warning counters are read in source order, so a field coerced after them loses

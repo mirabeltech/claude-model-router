@@ -221,6 +221,39 @@ export const predicates = Object.freeze({
     row.status === 'ok' &&
     row.worker_context_status === 'unknown',
 
+  /* ---- answer verification: claims checked against the file ---- */
+
+  /** Verification ran and the answer's claims checked out. */
+  summaryVerified: (row) => isReadable(row) && row.summary_verify_verdict === 'verified',
+
+  /**
+   * Verification ran and a claim did not check out — a line reference nowhere near the symbol, a
+   * quoted literal absent from the file, or most quoted identifiers missing.
+   *
+   * THE ONE MEASURED ACCURACY SIGNAL IN THE STORE. Not "the answer was bad": "the answer said
+   * something about this file that is not true of this file".
+   */
+  summarySuspect: (row) => isReadable(row) && row.summary_verify_verdict === 'suspect',
+
+  /** Verification ran and the answer made no mechanically checkable claim. NOT a pass. */
+  summaryNotCheckable: (row) => isReadable(row) && row.summary_verify_verdict === 'not_checkable',
+
+  /**
+   * Verification did not run: a gate refusal, a worker error, or `verify.enabled: false`.
+   *
+   * Distinct from `not_checkable` on purpose. "We did not look" and "we looked and there was
+   * nothing to check" are different states, and an operator who turned verification off needs to
+   * see that rather than read a page of zeros as reassurance.
+   */
+  summaryUnchecked: (row) =>
+    isReadable(row) &&
+    !isGateRow(row) &&
+    // `?? null` because a row WRITTEN BEFORE THESE COLUMNS EXISTED has the key absent, not null.
+    // A strict `=== null` reported zero of everything against the committed fixture corpus, which
+    // is precisely the old-row case this schema promises to read. Absent and null both mean "not
+    // checked" here; only a non-null verdict means a check happened.
+    (row.summary_verify_verdict ?? null) === null,
+
   truncatedAnswer: (row) => isReadable(row) && row.truncated === true,
   retried: (row) => isReadable(row) && typeof row.retry_count === 'number' && row.retry_count > 0,
   /** `retry_count` is null: unknown, and explicitly never defaulted to 0. */

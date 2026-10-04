@@ -50,6 +50,9 @@ export const MEASUREMENT_VALUES = Object.freeze(['actual', 'estimated', 'unavail
 /** Event outcome. `skipped` means no worker call was attempted (a gate decision, say). */
 export const STATUS_VALUES = Object.freeze(['ok', 'error', 'skipped'])
 
+/** Answer-verification verdicts. Open on read like every other enum: an unknown value buckets. */
+export const SUMMARY_VERIFY_VERDICTS = Object.freeze(['verified', 'suspect', 'not_checkable'])
+
 export const TASK_TYPES = Object.freeze(['bulk_read', 'code_write', 'gate_block', 'delegation', 'other'])
 
 export const ROUTING_DECISIONS = Object.freeze([
@@ -382,6 +385,20 @@ export const FIELD_ORDER = Object.freeze([
   'truncation_steps',
   'validation_warnings',
   'validation_codes',
+
+  /* answer verification. ADDITIVE, so `schema_version` stays 1: a reader built before these
+   * existed sees four columns it does not know and ignores them, which is the rule this schema
+   * already follows for every other addition.
+   *
+   * All four are null on a row where verification did not run — a gate refusal, a worker error, or
+   * `verify.enabled: false`. Null therefore means "not checked", which is a different and weaker
+   * statement than `summary_verify_verdict: 'not_checkable'`, which means "checked, and the answer
+   * made no claim that could be checked". Collapsing those two would hide an operator who turned
+   * verification off. */
+  'summary_verify_verdict',
+  'summary_verify_reason',
+  'summary_line_claims',
+  'summary_line_claims_wrong',
 
   /* governance (phase 9). All nullable; all null when governance was never evaluated, which is
    * the case for every row where routing refused before the budget was ever consulted. */

@@ -43,6 +43,7 @@ New here? [getting-started.md](getting-started.md), then come back.
 | [hook-integration.md](hook-integration.md) | The `PreToolUse` adapter, and verifying an installation. |
 | [claude-code-hook-contract.md](claude-code-hook-contract.md) | The host's behaviour as verified, including two silent traps. |
 | [failure-modes.md](failure-modes.md) | What happens when each part breaks, and why fail-open, fail-closed and safe refusal are not interchangeable. |
+| [summary-verification.md](summary-verification.md) | How a worker's summary is checked against the file before it replaces that file in Claude's context — and what the check cannot catch. |
 
 ## Extending it
 

@@ -805,6 +805,35 @@ export function answerQualitySection(response) {
     ),
   )
 
+  out.push('<h3>Claims checked against the file</h3>')
+  out.push(
+    table(
+      ['verdict', { text: 'count', numeric: true }, 'what it means'],
+      [
+        [
+          'claims check out',
+          { text: count(a.verified.value), numeric: true },
+          'every line reference, quoted literal and backticked identifier was found in the file. A FLOOR on accuracy, not a grade',
+        ],
+        [
+          'claims do NOT check out',
+          { text: count(a.suspect.value), numeric: true },
+          'the answer said something untrue about the file. Discarded under the shipped default, so this is the defence working',
+        ],
+        [
+          'no checkable claim',
+          { text: count(a.noCheckableClaim.value), numeric: true },
+          'the answer made no mechanical claim. NOT a pass \u2014 there was simply nothing to check',
+        ],
+        [
+          'not checked',
+          { text: count(a.notChecked.value), numeric: true },
+          'verification did not run: a worker error, or verify.enabled is false',
+        ],
+      ],
+    ),
+  )
+
   out.push(note(`Established: ${escapeHtml(a.established)}`))
   out.push(note(`NOT established: ${escapeHtml(a.notEstablished)}`))
 

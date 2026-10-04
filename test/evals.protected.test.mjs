@@ -257,6 +257,9 @@ test('with no intent the builder is an identity, so the default request is uncha
   //
   // The literal below is a CAPTURED SNAPSHOT, not a reconstruction. Rebuilding the expectation
   // from the same template that produces it would pass for any change made to both at once.
+  //
+  // RE-CAPTURED at PROMPT_VERSION 5, when the body gained `NNNN | ` line prefixes. The property
+  // under test — no intent means no extra section and no changed keys — is untouched.
   const files = [{ path: 'p.ts', content: 'const x = 1' }]
   const input = buildWorkerTask({
     toolContext: { baseTask: BULK_READ_TASK, lane: 'bulkRead' },
@@ -281,7 +284,7 @@ test('with no intent the builder is an identity, so the default request is uncha
       '# Files (1)',
       '',
       '<<<<<<<<<< FILE p.ts',
-      'const x = 1',
+      '1 | const x = 1',
       '>>>>>>>>>> END FILE p.ts',
       '',
     ].join('\n'),

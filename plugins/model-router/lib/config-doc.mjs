@@ -38,6 +38,11 @@ const GROUPS = Object.freeze([
   ],
   ['hooks', 'Hook', 'The Claude Code adapter, and what it is allowed to send.'],
   [
+    'verify',
+    'Answer verification',
+    'Checking the worker answer against the file it summarised, before that answer replaces the file in Claude context. Deterministic and on by default: a wrong summary is the one failure a developer cannot see, and the file is still in hand. A false positive costs one wasted worker call; a false negative poisons the context.',
+  ],
+  [
     'budget',
     'Governance',
     'Every limit ships `null`, meaning no configured limit — which is NOT `0`, a deliberately configured zero budget. Governance runs AFTER routing has ruled and can never rewrite its answer.',

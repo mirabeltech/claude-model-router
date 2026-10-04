@@ -394,6 +394,34 @@
         }
       }
     },
+    "verify": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check the worker answer against the file it summarised before that answer replaces the file in Claude context. Deterministic: line references, quoted literals and backticked identifiers are verified against the bytes. Env override: CMR_VERIFY_ENABLED."
+        },
+        "onSuspect": {
+          "type": "string",
+          "enum": [
+            "discard",
+            "warn",
+            "off"
+          ],
+          "default": "discard",
+          "description": "discard falls open to the real Read when a claim cannot be confirmed; warn substitutes the summary and appends a caveat naming what failed; off records the verdict and acts on nothing. Env override: CMR_VERIFY_ON_SUSPECT."
+        },
+        "maxUngroundedIdentifierRatio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.25,
+          "description": "Share of backticked identifiers that may be absent from the file before the answer is suspect. A wrong line reference or an invented string literal is enough on its own. Env override: CMR_VERIFY_MAX_UNGROUNDED_RATIO."
+        }
+      }
+    },
     "budget": {
       "type": "object",
       "additionalProperties": false,

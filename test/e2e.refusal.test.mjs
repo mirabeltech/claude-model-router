@@ -438,3 +438,158 @@ test('a safe refusal and a worker failure land in different buckets, and the rep
     failed.cleanup()
   }
 })
+
+/* ------------------------- H. a worker that fabricates: verified, then discarded */
+
+test('H. a summary whose claims do not check out is DISCARDED, not substituted', async () => {
+  // THE FAILURE A DEVELOPER CANNOT SEE. The worker's answer replaces the file in Claude's
+  // context, so a fabrication is indistinguishable from a good summary until something built on
+  // it breaks. Verification happens before substitution, and `verify.onSuspect: 'discard'` (the
+  // shipped default) falls open to the real Read.
+  //
+  // Driven through the real hook with the real dispatcher, overriding only the worker's TEXT, so
+  // what is tested is the shipped decision path rather than the verifier in isolation.
+  const ws = makeTempDir('refuse-fabricated')
+  try {
+    const projectDir = path.join(ws.dir, 'project')
+    fs.mkdirSync(projectDir, { recursive: true })
+    const target = path.join(projectDir, 'big.ts')
+    fs.writeFileSync(target, PADDING.repeat(Math.ceil(48_000 / PADDING.length)))
+    const transcript = path.join(projectDir, 't.jsonl')
+    fs.writeFileSync(transcript, '')
+
+    const { runReadHook } = await import('../plugins/model-router/lib/hook/run.mjs')
+    const { hookConfig, hookEnv, readStdin } = await import('./helpers/hook-payload.mjs')
+
+    const fabricated = [
+      'This file declares `getUserByEmail` on line 412 and `AuditLogWriter` on line 980.',
+      'It throws `"no such tenant in the registry"` when the lookup fails.',
+    ].join('\n')
+
+    const out = await runReadHook({
+      raw: readStdin({ cwd: projectDir, transcript_path: transcript, tool_input: { file_path: target } }),
+      config: hookConfig(),
+      env: hookEnv('http://127.0.0.1:1'),
+      dispatchImpl: async () => ({
+        ok: true,
+        status: 'ok',
+        reason: 'completed',
+        provider: 'mock',
+        model: 'mock-1',
+        text: fabricated,
+        usage: null,
+        capabilities: null,
+        attempts: 1,
+        latencyMs: 5,
+        error: null,
+        promptVersion: 5,
+        policyVersion: 1,
+      }),
+      emit: () => null,
+    })
+
+    assert.equal(out.outcome, 'summary_unverified', 'the outcome names why it was not substituted')
+    assert.equal(out.response, null, 'ZERO BYTES: the developer gets their own Read')
+    assert.ok(out.result, 'and the worker call is still on the record, because it was still paid for')
+  } finally {
+    ws.cleanup()
+  }
+})
+
+test('H2. the same fabrication is substituted WITH A CAVEAT under onSuspect: warn', async () => {
+  // The other operator choice: keep the summary, but tell Claude which claims failed. Claude is
+  // the one consumer that can act on that — it can re-read the file.
+  const ws = makeTempDir('refuse-fabricated-warn')
+  try {
+    const projectDir = path.join(ws.dir, 'project')
+    fs.mkdirSync(projectDir, { recursive: true })
+    const target = path.join(projectDir, 'big.ts')
+    fs.writeFileSync(target, PADDING.repeat(Math.ceil(48_000 / PADDING.length)))
+    const transcript = path.join(projectDir, 't.jsonl')
+    fs.writeFileSync(transcript, '')
+
+    const { runReadHook } = await import('../plugins/model-router/lib/hook/run.mjs')
+    const { hookConfig, hookEnv, readStdin } = await import('./helpers/hook-payload.mjs')
+
+    const out = await runReadHook({
+      raw: readStdin({ cwd: projectDir, transcript_path: transcript, tool_input: { file_path: target } }),
+      config: hookConfig({ verify: { enabled: true, onSuspect: 'warn', maxUngroundedIdentifierRatio: 0.25 } }),
+      env: hookEnv('http://127.0.0.1:1'),
+      dispatchImpl: async () => ({
+        ok: true,
+        status: 'ok',
+        reason: 'completed',
+        provider: 'mock',
+        model: 'mock-1',
+        text: 'This file declares `getUserByEmail` on line 412 and `AuditLogWriter` on line 980.',
+        usage: null,
+        capabilities: null,
+        attempts: 1,
+        latencyMs: 5,
+        error: null,
+        promptVersion: 5,
+        policyVersion: 1,
+      }),
+      emit: () => null,
+    })
+
+    assert.equal(out.outcome, 'delegated')
+    assert.ok(out.response, 'the summary IS substituted')
+    const hso = out.response.hookSpecificOutput
+    assert.match(hso.permissionDecisionReason, /could not be confirmed/, 'and Claude is told')
+    assert.match(hso.permissionDecisionReason, /re-read the file with offset and limit/)
+    // The caveat goes in the REASON, never mixed into the worker's own words.
+    assert.equal(/could not be confirmed/.test(hso.additionalContext), false)
+  } finally {
+    ws.cleanup()
+  }
+})
+
+test('H3. a summary that checks out is substituted with no caveat at all', async () => {
+  // The baseline for H and H2: verification must not interfere with a good answer. The padding
+  // file is full of `value`, so an answer quoting it is grounded.
+  const ws = makeTempDir('refuse-verified-ok')
+  try {
+    const projectDir = path.join(ws.dir, 'project')
+    fs.mkdirSync(projectDir, { recursive: true })
+    const target = path.join(projectDir, 'big.ts')
+    fs.writeFileSync(target, PADDING.repeat(Math.ceil(48_000 / PADDING.length)))
+    const transcript = path.join(projectDir, 't.jsonl')
+    fs.writeFileSync(transcript, '')
+
+    const { runReadHook } = await import('../plugins/model-router/lib/hook/run.mjs')
+    const { hookConfig, hookEnv, readStdin } = await import('./helpers/hook-payload.mjs')
+
+    const out = await runReadHook({
+      raw: readStdin({ cwd: projectDir, transcript_path: transcript, tool_input: { file_path: target } }),
+      config: hookConfig(),
+      env: hookEnv('http://127.0.0.1:1'),
+      dispatchImpl: async () => ({
+        ok: true,
+        status: 'ok',
+        reason: 'completed',
+        provider: 'mock',
+        model: 'mock-1',
+        text: 'This file declares `value` on line 1 and repeats that declaration throughout.',
+        usage: null,
+        capabilities: null,
+        attempts: 1,
+        latencyMs: 5,
+        error: null,
+        promptVersion: 5,
+        policyVersion: 1,
+      }),
+      emit: () => null,
+    })
+
+    assert.equal(out.outcome, 'delegated')
+    assert.ok(out.response)
+    assert.equal(
+      /could not be confirmed/.test(out.response.hookSpecificOutput.permissionDecisionReason),
+      false,
+      'a good answer earns no caveat',
+    )
+  } finally {
+    ws.cleanup()
+  }
+})

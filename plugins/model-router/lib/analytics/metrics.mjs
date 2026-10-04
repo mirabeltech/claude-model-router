@@ -170,6 +170,10 @@ const COUNTER_NAMES = Object.freeze([
   'truncatedAnswer',
   'answerDelivered',
   'answerUnverifiedWindow',
+  'summaryVerified',
+  'summarySuspect',
+  'summaryNotCheckable',
+  'summaryUnchecked',
   'retried',
   'retryCountUnknown',
   'negativeTokens',
@@ -553,12 +557,32 @@ export function finalizeMetrics(state, { timeRange, gateDecisionsRecorded }) {
       // returned. Reported beside the risk above because together they are the whole picture.
       discardedForTruncation: serializeCount(c.capabilityRefusalTruncationDiscarded, 'countable'),
       usageInconsistent: serializeCount(c.tokenSumMismatch, 'dispatchAttempted'),
+
+      /*
+       * CLAIM VERIFICATION. The one measured accuracy signal here, and the reason `measured`
+       * above stays `false` anyway: this checks whether an answer said something UNTRUE about the
+       * file, not whether it said anything USEFUL. A summary can have every claim check out and
+       * still be a poor summary — it can omit the thing that mattered. So this is a floor on
+       * accuracy, not a measure of quality.
+       *
+       * `suspect` is the number to watch: those answers claimed a line reference nowhere near the
+       * symbol, quoted a literal absent from the file, or named mostly identifiers the file does
+       * not contain. Under the shipped `verify.onSuspect: 'discard'` they were thrown away and the
+       * developer got the ordinary Read, so a non-zero count here is the defence working rather
+       * than damage taken.
+       */
+      claimsChecked: true,
+      verified: serializeCount(c.summaryVerified, 'dispatchAttempted'),
+      suspect: serializeCount(c.summarySuspect, 'dispatchAttempted'),
+      noCheckableClaim: serializeCount(c.summaryNotCheckable, 'dispatchAttempted'),
+      notChecked: serializeCount(c.summaryUnchecked, 'dispatchAttempted'),
+
       established:
-        'A worker returned an answer, and these are the measured conditions that bound confidence in it. An answer whose prompt was provably truncated is discarded, not delivered.',
+        'A worker returned an answer, and these are the measured conditions that bound confidence in it. An answer whose prompt was provably truncated is discarded, not delivered, and an answer whose claims about the file do not check out is verified against the bytes and discarded too.',
       notEstablished:
-        'Whether any delivered answer is correct. There is no baseline comparison against the primary model and no grader, so nothing here distinguishes a good answer from a confident wrong one.',
+        'Whether any delivered answer is correct, or useful. Claim verification is a floor, not a grade: an answer can have every line reference and literal check out and still omit the thing that mattered. There is no baseline comparison against the primary model and no grader.',
       note:
-        'NOT A QUALITY SCORE. Every figure in this section is a count of a measured condition; none of them grades an answer. See docs/release-v1.md section 7 for the evidence boundary.',
+        'NOT A QUALITY SCORE. Every figure in this section is a count of a measured condition; none of them grades an answer. See docs/summary-verification.md for what the check can and cannot catch.',
     },
 
     value: {

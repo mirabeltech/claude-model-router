@@ -46,9 +46,16 @@ test('with no intent the builder returns exactly the two keys the hook has alway
   }
 })
 
-test('and the prompt it renders is byte-identical to the pre-Phase-7 template', () => {
+test('and the prompt it renders is byte-identical to the captured template', () => {
   // The expectation is a captured literal, not a rebuild from the same template that produces it
   // — which would pass for a change made to both at once.
+  //
+  // RE-CAPTURED at PROMPT_VERSION 5, when the file body gained `NNNN | ` line prefixes. The
+  // invariant this test protects is unchanged and is the one above: with no intent the builder is
+  // an identity and emits no extra section. What moved is the body, deliberately, because the task
+  // asks for the line a declaration is on and the un-numbered body made that unanswerable — the
+  // worker silently dropped it. A snapshot that moved without a version bump would be the thing
+  // this test exists to catch, so the bump is asserted on the next line.
   const out = buildWorkerTask({ toolContext: readCtx, files: FILES, taskIntent: null })
   const built = bulk.build(out)
   assert.equal(
@@ -61,7 +68,8 @@ test('and the prompt it renders is byte-identical to the pre-Phase-7 template', 
       '# Files (1)',
       '',
       '<<<<<<<<<< FILE src/handlers.ts',
-      "registerHandler('x_137', {})\n",
+      "1 | registerHandler('x_137', {})",
+      '2 | ',
       '>>>>>>>>>> END FILE src/handlers.ts',
       '',
     ].join('\n'),

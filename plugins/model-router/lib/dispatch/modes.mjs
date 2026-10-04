@@ -32,7 +32,25 @@ import { LANE_MODE } from '../routing-policy.mjs'
  * toward brevity — and that is the observed failure. It now subordinates concision to coverage
  * explicitly, which is the smallest change that removes the ambiguity.
  */
-export const PROMPT_VERSION = 3
+export const PROMPT_VERSION = 5
+
+/*
+ * 3 -> 5: THE FILE IS NOW SENT WITH LINE NUMBERS. (4 was taken by INTENT_PROMPT_VERSION.)
+ *
+ * The task has always asked for "every significant declaration with the line it is on", and the
+ * prompt has always sent the file as raw bytes with no line numbers in it. MEASURED against
+ * Ollama / mistral:latest at temperature 0: the worker silently DROPPED that half of the task and
+ * produced no line references at all. We were asking for something the input made impossible.
+ *
+ * With `NNNN | ` prefixes the same model produced three line references and all three were exact
+ * (`Entity` 8, `Record1` 11, `normalizeRecord1` 19). That is worth two things beyond compliance:
+ * Claude can act on a correct line number with a targeted re-read, and a line reference is
+ * EXACTLY CHECKABLE against the file afterwards — which is what `lib/verify/summary.mjs` does.
+ *
+ * The cost is real and bounded: the prefix adds roughly 7 bytes a line, so a 12 KB 350-line file
+ * grows about 2.5 KB, around 600 extra prompt tokens. A row stamped 5 is therefore NOT token
+ * comparable with a row stamped 3, which is the whole reason this integer exists.
+ */
 
 /**
  * The version a prompt reports when it carries a task intent.
@@ -69,6 +87,8 @@ const BULK_READER_SYSTEM = [
   '',
   'Rules:',
   '- Use only the file contents given below. You have no filesystem, no shell and no network.',
+  '- Every file line is prefixed with its number as `NNNN | `. The prefix is NOT part of the file:',
+  '  never quote it as content, and use it to state the line a declaration is on.',
   '- If the answer is not present in the supplied material, say so plainly. Do not guess, and do',
   '  not describe what a file probably contains.',
   '- Cite the file path when a statement comes from a particular file.',
@@ -108,12 +128,35 @@ function versionFor(extra) {
   return extra.length === 0 ? PROMPT_VERSION : INTENT_PROMPT_VERSION
 }
 
+/**
+ * Prefix every line with its 1-based number, right-aligned, `NNNN | `.
+ *
+ * Right-aligned and padded so the content column is straight, which is how every editor and every
+ * `cat -n` presents a file — the shape a model has seen most. The separator is a pipe rather than
+ * a colon because a colon appears inside TypeScript on nearly every line, and the worker is asked
+ * to quote identifiers exactly; an ambiguous separator invites it to quote the number too.
+ *
+ * Width is computed from the file, not fixed, so a 90-line file does not carry three dead columns.
+ */
+function numberLines(content) {
+  const lines = String(content).split('\n')
+  const width = String(lines.length).length
+  return lines.map((line, i) => `${String(i + 1).padStart(width, ' ')} | ${line}`).join('\n')
+}
+
 function buildBulkReader(input) {
   const extra = requirementLines(input)
   const lines = ['# Task', '', String(input.task).trim(), '']
   lines.push(...extra, `# Files (${input.files.length})`, '')
   for (const file of input.files) {
-    lines.push(`${FENCE} ${file.path}`, String(file.content), `${FENCE_END} ${file.path}`, '')
+    lines.push(
+      `${FENCE} ${file.path}`,
+      // NUMBERED. See PROMPT_VERSION: the task asks for the line a declaration is on, and without
+      // these the worker cannot answer it and we cannot check it.
+      numberLines(file.content),
+      `${FENCE_END} ${file.path}`,
+      '',
+    )
   }
   return { system: BULK_READER_SYSTEM, prompt: lines.join('\n'), promptVersion: versionFor(extra) }
 }
