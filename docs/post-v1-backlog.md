@@ -170,6 +170,40 @@ number with nothing to compare it to.
 (The empty `test/behavioural/` directory was removed in phase 12. An empty directory documented as
 holding cases is worse than its absence.)
 
+### 13. A per-answer grounding check, with its false-positive rate measured first
+
+`test/evals/evaluators.mjs` already has the machinery: `codePositionTokens()` extracts
+identifier-shaped tokens from code position only — inside backticks or quotes, camelCase,
+snake_case, `foo()` — which is the design that keeps it off prose words like "structure" and
+"declaration". A runtime check would be: every code-position identifier in the worker's answer
+must appear in the file content it was given. An answer citing `getUserById` about a file with no
+such token is demonstrably fabricated, deterministically, with no model involved.
+
+**Why this is not shipped, and why that is not timidity.** `test/evals/gates.mjs` records the
+honest failure profile of the advisory version: false positives are *common* — "roughly one per run
+across five dispatch cases" — from legitimate composition (an answer writing `resolveWorkerConfig`
+about `resolveWorker` plus `deriveConfig`), prose casing drift, and pluralisation. Rendering that
+as a dashboard quality number would be the same overclaiming the rest of this project refuses, just
+inverted: a team chasing false positives trusts the report *less*. There is also a structural false
+negative it can never fix — recombination of real tokens into a false claim. `decide() calls
+resolveWorker()` has every token in the lexicon and is false.
+
+**The sharpened design, and its precondition.** Most of the false positives are *decomposable*:
+`resolveWorkerConfig` is a concatenation of present tokens. A check that excluded tokens
+decomposable into two or more present tokens, and ignored plurals and possessives, would plausibly
+cut the rate far enough to be useful. **That is a hypothesis, and this project does not ship
+hypotheses as measurements.** The precondition is a measured false-positive rate over the corpus,
+reported the way every other benchmark number here is reported.
+
+**Why P1 and not P2:** it is the only route to a *per-delegation* quality signal that does not
+require a primary-model baseline, and it would catch the exact failure the context-budget work
+exists to prevent — a confident answer about a prompt the model never fully saw.
+
+(What shipped instead, at V1, is the honest half: the report now leads with an **Answer quality**
+section that says `NOT MEASURED` and reports only measured confidence-bounding conditions,
+including how many delivered answers came from a worker whose window could not be verified. That
+closes the "a healthy dashboard implies good answers" hole without inventing a metric.)
+
 ## P3 — exploratory
 
 ### 11. Delegation-steering skills

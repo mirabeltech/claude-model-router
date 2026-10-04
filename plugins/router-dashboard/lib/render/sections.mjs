@@ -740,6 +740,89 @@ export function trendsSection(response) {
   return out.join('')
 }
 
+/* ----------------------------------------------------------- answer quality */
+
+/**
+ * The one section whose job is to be impossible to misread as a pass.
+ *
+ * WHY IT EXISTS. Every other section on this page reports a figure that goes UP when delegation
+ * works — delegation rate, tokens avoided, success rate, cost avoided. A reader who scans the
+ * overview and stops concludes the router is doing well, and before this section nothing on the
+ * page contradicted that reading. Whether the ANSWERS were any good is not established anywhere
+ * in this project, and a dashboard that can be read as claiming otherwise is worse than one
+ * aggregate short.
+ *
+ * It renders SECOND, directly after the overview, for the same reason.
+ *
+ * EVERY FIGURE HERE IS A COUNT OF A MEASURED CONDITION. None of them grades an answer, and the
+ * section says so in a callout rather than a footnote, because a footnote is where a caveat goes
+ * to be ignored.
+ */
+export function answerQualitySection(response) {
+  const a = response.answerQuality
+  const out = [h2('Answer quality')]
+
+  out.push(
+    callout(
+      'NOT MEASURED. Nothing in this report grades an answer. There is no baseline comparison ' +
+        'against the primary model and no grader, so none of these figures distinguishes a good ' +
+        'answer from a confident wrong one. What follows is the set of measured conditions that ' +
+        'bound confidence in a delivered answer.',
+      { bad: true },
+    ),
+  )
+
+  out.push(
+    table(
+      ['measure', { text: 'count', numeric: true }, 'what it means'],
+      [
+        [
+          'answers delivered',
+          { text: count(a.delivered.value), numeric: true },
+          'returned to Claude. Correctness unknown',
+        ],
+        [
+          'on an unverified window',
+          { text: count(a.onUnverifiedWindow.value), numeric: true },
+          'the context window could not be determined, so silent truncation could not have been detected either. THE RESIDUAL RISK',
+        ],
+        [
+          'cut off mid-answer',
+          { text: count(a.cutOffMidAnswer.value), numeric: true },
+          'the worker ran out of output budget. The answer is incomplete',
+        ],
+        [
+          'discarded for truncation',
+          { text: count(a.discardedForTruncation.value), numeric: true },
+          'truncation WAS detected and the answer was thrown away rather than returned. The defence working',
+        ],
+        [
+          'usage inconsistent',
+          { text: count(a.usageInconsistent.value), numeric: true },
+          "the provider's own token arithmetic did not add up",
+        ],
+      ],
+    ),
+  )
+
+  out.push(note(`Established: ${escapeHtml(a.established)}`))
+  out.push(note(`NOT established: ${escapeHtml(a.notEstablished)}`))
+
+  if (a.onUnverifiedWindow.value > 0) {
+    out.push(
+      callout(
+        `${count(a.onUnverifiedWindow.value)} delivered answer(s) came from a worker whose context ` +
+          'window could not be determined. An unknown window is never treated as unlimited — the request ' +
+          'still ran under the transport byte ceiling — but truncation detection needs a window, so for ' +
+          'these calls a silently middle-dropped prompt would not have been caught. Set a provider ' +
+          'contextTokens value, or use a provider that reports its own window, to remove this gap.',
+      ),
+    )
+  }
+
+  return out.join('')
+}
+
 /* ------------------------------------------------------------- data quality */
 
 export function dataQualitySection(response) {
@@ -853,6 +936,9 @@ export function footerSection(response, { dashboardVersion }) {
 /** Every section, in the order the report presents them. */
 export const SECTION_RENDERERS = Object.freeze([
   overviewSection,
+  // SECOND, deliberately. See answerQualitySection's header: a reader who scans the overview and
+  // stops must meet the evidence boundary before the favourable numbers, not after them.
+  answerQualitySection,
   routingSection,
   workerSection,
   savingsSection,

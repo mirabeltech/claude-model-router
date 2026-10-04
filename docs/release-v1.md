@@ -122,7 +122,7 @@ install reports no dollar figure, and a fresh keyless install is healthy and **w
 
 | Command | Result |
 |---|---|
-| `npm test` | **2376 tests, 2375 pass, 0 fail, 1 skipped** |
+| `npm test` | **2389 tests, 2388 pass, 0 fail, 1 skipped** |
 | `npm run validate` | `--strict` clean on all three manifests |
 | `npm run doctor -- --json --offline` | exit 0 · 20 pass · 5 warn · 0 fail · 25 info |
 | `npm run evals -- --quiet --no-color` | pass |
@@ -177,6 +177,12 @@ promise. Ranked work for each is in [post-v1-backlog.md](post-v1-backlog.md).
 9. **`code-writer` is unreachable** and `routing.codeWrite.enforce` intercepts nothing.
 10. **Hook, governance and capability latency are not instrumented** and report `null` in a row,
     even though all three are now measured by harnesses.
+11. **There is no per-answer grounding check.** An advisory `no_invented_entities` evaluator exists
+    in the eval framework and was deliberately *not* promoted to runtime: its own documented
+    failure profile puts false positives at roughly one per five dispatch cases, from legitimate
+    composition and prose casing drift. A noisy detector rendered as a quality number is the same
+    overclaiming problem inverted. Backlog item 13 carries the sharpened design and its
+    precondition — measure the false-positive rate first.
 
 ## 6. Live worker smoke-test status
 
@@ -211,6 +217,16 @@ corpus crossed with every protected task type. That an oversized prompt is refus
 silently truncated. That a budget, once configured, binds within bounded overshoot. That every
 failure path leaves the developer's `Read` working. That the numbers reported are measured or
 `NULL`, never guessed.
+
+**Surfaced, so a reader cannot miss it.** The analytics CLI and the HTML report both carry an
+**Answer quality** section, rendered second — before any favourable figure — that leads with
+`NOT MEASURED` and reports only measured conditions that bound confidence in a delivered answer:
+how many answers were delivered, how many came from a worker whose context window could not be
+verified (the residual risk), how many were cut off mid-answer, how many were discarded *because*
+truncation was detected (the defence working), and how many had inconsistent provider arithmetic.
+`answerQuality.measured` is literally `false` in the response, so no consumer can render it as a
+score. This was added after V1's first draft, because a report that could be read as claiming
+quality was the single most misleading thing about it.
 
 **Not established, and not claimed.**
 
@@ -253,7 +269,7 @@ neither catches recombination of real tokens into a false claim.
 | Performance | PASS | §4; every published number now has a committed harness | — |
 | Deterministic behaviour | PASS | 5 generated-file gates + 3 byte-diff gates + cross-process row equality | — |
 | Live worker integration | PASS WITH LIMITATION | §6 — three Ollama scenarios | Gemini NOT TESTED; delegation needed a reduced file (§6) |
-| Quality evidence | **NOT TESTED** | §7 | **deliberate.** No baseline, no A/B. Not promoted. |
+| Quality evidence | **NOT TESTED** | §7 · `analytics.answers` (13) | **deliberate.** No baseline, no A/B. Not promoted — but now impossible to miss: the report leads with NOT MEASURED. |
 | Architecture freeze | PASS | 199 edges, 0 cycles, every file ranked, every builtin declared | — |
 | Fail-open behaviour | PASS | `failure-modes.md`, every row with a test; previously-unreachable branches now driven | 2 branches unreachable and declared |
 | Configuration | PASS | `config.fuzz`: 77 leaves × every invalid kind, + 400 safety mutations | — |

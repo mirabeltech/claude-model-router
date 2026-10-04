@@ -19,17 +19,17 @@ unmeasured.
 
 | | Baseline | Final | Delta |
 |---|---|---|---|
-| Tests | 2250 | **2376** | +126 |
-| Passing | 2249 | 2375 | +126 |
+| Tests | 2250 | **2389** | +139 |
+| Passing | 2249 | 2388 | +139 |
 | Failing | 0 | **0** | — |
 | Skipped | 1 | 1 | — |
-| Test files | 98 | 108 | +10 |
+| Test files | 98 | 109 | +11 |
 | Files changed | — | 28 | +4,204 / −68 lines |
 
 The skip is unchanged: `test/analytics.performance.test.mjs`'s 100,000-row case, gated behind
 `ROUTER_PERF_FULL=1` because it writes ~300 MB of scratch. It was run once during this phase.
 
-**Test count was not the objective.** +126 tests closed 13 previously-unreachable error branches,
+**Test count was not the objective.** +139 tests closed 13 previously-unreachable error branches,
 added a whole-repository import graph, and walked a boundary nobody had walked. Several of the most
 useful additions are three assertions inside an existing test.
 

@@ -188,6 +188,39 @@ export const predicates = Object.freeze({
     !isGateRow(row) &&
     (row.status !== 'ok' || row.worker_input_truncation_detected === true),
 
+  /* ---- answer quality: the population whose correctness is NOT measured ---- */
+
+  /**
+   * An answer that was actually DELIVERED to Claude: dispatched, ok, and non-empty.
+   *
+   * This is the population the `answerQuality` section exists to describe, and the reason it is
+   * not simply `delegationOk` is the next predicate: what matters about a delivered answer is how
+   * much of it we could verify, and that question only applies to answers somebody received.
+   */
+  answerDelivered: (row) =>
+    isReadable(row) &&
+    !isGateRow(row) &&
+    row.status === 'ok' &&
+    typeof row.returned_answer_chars === 'number' &&
+    row.returned_answer_chars > 0,
+
+  /**
+   * THE RESIDUAL RISK, and the only honest per-answer confidence signal in the store.
+   *
+   * A delivered answer whose context window could not be determined. It matters because
+   * truncation detection needs a window: with one, an answer built from a silently middle-dropped
+   * prompt is detected and DISCARDED (see `capabilityRefusalTruncationDiscarded`, which is that
+   * defence working). Without one, the same thing could have happened and nothing would notice.
+   *
+   * So this is not "the answer is wrong". It is "this answer is the kind we cannot vouch for",
+   * which is a measured fact about our own coverage rather than a guess about the model.
+   */
+  answerUnverifiedWindow: (row) =>
+    isReadable(row) &&
+    !isGateRow(row) &&
+    row.status === 'ok' &&
+    row.worker_context_status === 'unknown',
+
   truncatedAnswer: (row) => isReadable(row) && row.truncated === true,
   retried: (row) => isReadable(row) && typeof row.retry_count === 'number' && row.retry_count > 0,
   /** `retry_count` is null: unknown, and explicitly never defaulted to 0. */

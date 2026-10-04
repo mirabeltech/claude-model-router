@@ -294,6 +294,27 @@ export function renderText(response, { color = true, verbose = false } = {}) {
     for (const b of r.failures.byErrorCode.buckets) kv(`  ${keyLabel(b.key)}`, String(b.count))
   }
 
+  /* ---- answer quality ----
+   *
+   * Placed here rather than at the end BECAUSE OF WHERE A READER STOPS. Every section above
+   * reports a number that goes up when delegation works, and a reader who scans the overview and
+   * stops concludes the router is doing well. Nothing contradicted that reading before this
+   * section existed, and whether the ANSWERS were any good is not established anywhere in this
+   * project. This is the one section whose job is to be impossible to misread as a pass.
+   */
+  section('Answer quality')
+  line(`  ${c(RED, 'NOT MEASURED')}  ${c(DIM, 'nothing here grades an answer')}`)
+  line('')
+  const aq = r.answerQuality
+  kv('answers delivered', metric(aq.delivered), 'correctness unknown')
+  kv('  on an unverified window', metric(aq.onUnverifiedWindow), 'could not confirm the prompt fitted')
+  kv('  cut off mid-answer', metric(aq.cutOffMidAnswer), 'incomplete')
+  kv('discarded for truncation', metric(aq.discardedForTruncation), 'the defence working')
+  kv('usage inconsistent', metric(aq.usageInconsistent), "provider arithmetic did not add up")
+  line('')
+  line(`  ${c(DIM, 'established:     ' + aq.established)}`)
+  line(`  ${c(DIM, 'NOT established: ' + aq.notEstablished)}`)
+
   /* ---- trends ---- */
   section('Trends')
   const dateBuckets = new Map(r.segments.date.buckets.map((b) => [b.key, b]))

@@ -582,6 +582,9 @@ gated behind `ROUTER_PERF_FULL=1` because its scratch store is ~290 MB.
 - **No dollar figure on a default install.** By design; see §2.
 - **Hook, governance and capability latency are not instrumented** and report `null`.
 - **No measured primary-model baseline**, so every avoided figure is a counterfactual estimate.
+- **Answer correctness is not measured.** The `answerQuality` section reports measured conditions
+  that bound confidence in a delivered answer — it does not grade one, and `measured` is `false` in
+  the response so a consumer cannot present it as a score. See `docs/release-v1.md` §7.
 - **`approvedNotDispatched` is ambiguous** — see §9.
 - **`failures.retryable` cannot be classified** from this layer.
 - **Latency is reported per window, not per worker profile.** A percentile buffer per

@@ -148,6 +148,7 @@ const POPULATION_PREDICATES = Object.freeze({
   negativeDollarRows: predicates.negativeDollars,
   allRows: () => true,
   routingEvents: predicates.countable,
+  answerDelivered: predicates.answerDelivered,
 })
 
 /** The counted conditions. Every one is reported even at zero, so an absence is visible. */
@@ -167,6 +168,8 @@ const COUNTER_NAMES = Object.freeze([
   'tokenSumMismatch',
   'noUsableAnswer',
   'truncatedAnswer',
+  'answerDelivered',
+  'answerUnverifiedWindow',
   'retried',
   'retryCountUnknown',
   'negativeTokens',
@@ -519,6 +522,43 @@ export function finalizeMetrics(state, { timeRange, gateDecisionsRecorded }) {
       truncationDetected: serializeCount(c.capabilityRefusalTruncationDiscarded, 'countable'),
       note:
         'Only a provider_api source yields a measured status. A null context window is unknown, never infinite, and a configured value is never a measured capability.',
+    },
+
+    /**
+     * ANSWER QUALITY, which is NOT MEASURED — and this section exists to say so where a reader
+     * will actually see it.
+     *
+     * WHY IT IS HERE. Every other section reports a number that goes UP when delegation works:
+     * delegation rate, tokens avoided, success rate. A reader scanning a healthy report concludes
+     * the router is doing well, and nothing on the page contradicts that reading — while whether
+     * the ANSWERS were any good is not established anywhere in this project. A dashboard that
+     * cannot be read as overclaiming is worth more than one more aggregate.
+     *
+     * WHAT IT REPORTS, and it is all measured. Not a score, not an estimate, not a grade: four
+     * counts of conditions that bound confidence in a delivered answer, each naming its
+     * population, plus the explicit statement that correctness is unmeasured.
+     *
+     * `measured: false` IS A FIELD rather than only prose, so a consumer that renders this
+     * section cannot accidentally present it as a quality figure, and a future consumer that
+     * gains a real grader has something to flip.
+     */
+    answerQuality: {
+      measured: false,
+      delivered: serializeCount(c.answerDelivered, 'dispatchAttempted', { label: 'answers' }),
+      // The residual risk, and the actionable line. These answers may have been built from a
+      // silently truncated prompt and nothing could have detected it.
+      onUnverifiedWindow: serializeCount(c.answerUnverifiedWindow, 'answerDelivered'),
+      cutOffMidAnswer: serializeCount(c.truncatedAnswer, 'dispatchAttempted'),
+      // The defence WORKING: truncation was detected, so the answer was thrown away rather than
+      // returned. Reported beside the risk above because together they are the whole picture.
+      discardedForTruncation: serializeCount(c.capabilityRefusalTruncationDiscarded, 'countable'),
+      usageInconsistent: serializeCount(c.tokenSumMismatch, 'dispatchAttempted'),
+      established:
+        'A worker returned an answer, and these are the measured conditions that bound confidence in it. An answer whose prompt was provably truncated is discarded, not delivered.',
+      notEstablished:
+        'Whether any delivered answer is correct. There is no baseline comparison against the primary model and no grader, so nothing here distinguishes a good answer from a confident wrong one.',
+      note:
+        'NOT A QUALITY SCORE. Every figure in this section is a count of a measured condition; none of them grades an answer. See docs/release-v1.md section 7 for the evidence boundary.',
     },
 
     value: {
