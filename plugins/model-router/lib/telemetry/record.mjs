@@ -400,6 +400,22 @@ export const FIELD_ORDER = Object.freeze([
   'summary_line_claims',
   'summary_line_claims_wrong',
 
+  /* the escalation ladder. ADDITIVE, so `schema_version` stays 1.
+   *
+   * ONE ROW PER READ IS PRESERVED, deliberately. A ladder means one Read can make several worker
+   * calls, and emitting a row per call would double-count every existing metric — the delegation
+   * rate, the refusal rate and the success rate all have the routing-event population as their
+   * denominator, and one Read is one routing event however many workers it took. So the row
+   * describes the attempt whose answer was RETURNED, and these four columns describe the journey.
+   *
+   * `escalation_wasted_*` is what keeps the cost honest: tokens spent on an answer that was
+   * abandoned were really consumed, and a ladder that hid its own waste would understate what
+   * delegation costs. Null, not 0, when nothing was wasted. */
+  'escalation_attempts',
+  'escalation_path',
+  'escalation_wasted_input_tokens',
+  'escalation_wasted_output_tokens',
+
   /* governance (phase 9). All nullable; all null when governance was never evaluated, which is
    * the case for every row where routing refused before the budget was ever consulted. */
   'governance_decision',

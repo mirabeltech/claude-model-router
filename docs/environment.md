@@ -8,7 +8,7 @@ document cannot quietly fall behind the code.
 
 ## Settings
 
-79 variables, one per setting, generated from `SPEC` (config version 1).
+82 variables, one per setting, generated from `SPEC` (config version 1).
 Each overrides the matching setting from a config file, and is itself overridden only by a plugin
 option. This is how CI pins behaviour and how the kill switches work. What each setting MEANS is in
 [configuration.md](configuration.md); this table is the variable name, the type and the default.
@@ -33,6 +33,7 @@ option. This is how CI pins behaviour and how the kill switches work. What each 
 | `CMR_CODE_WRITE_WORKER_API_KEY_ENV` | `workers.codeWrite.apiKeyEnv` | string | `null` | no |
 | `CMR_CODE_WRITE_WORKER_TIMEOUT_MS` | `workers.codeWrite.timeoutMs` | int | `null` | no |
 | `CMR_GEMINI_BASE_URL` | `providers.gemini.baseUrl` | string | `"https://generativelanguage.googleapis.com/v1beta"` | no |
+| `CMR_GEMINI_MODEL` | `providers.gemini.model` | string | `"gemini-2.5-flash"` | no |
 | `CMR_OLLAMA_BASE_URL` | `providers.ollama.baseUrl` | string | `"http://127.0.0.1:11434"` | no |
 | `CMR_OLLAMA_MODEL` | `providers.ollama.model` | string | `"qwen2.5-coder:7b"` | no |
 | `CMR_OLLAMA_CONTEXT_TOKENS` | `providers.ollama.contextTokens` | int | `null` | no |
@@ -50,6 +51,8 @@ option. This is how CI pins behaviour and how the kill switches work. What each 
 | `CMR_ALLOW_GLOBS` | `routing.allowGlobs` | string[] | `[]` | no |
 | `CMR_NEVER_ON_TARGETED_READ` | `routing.neverDelegate.onTargetedRead` | bool | `true` | no |
 | `CMR_NEVER_ON_RECENTLY_EDITED` | `routing.neverDelegate.onRecentlyEdited` | bool | `true` | no |
+| `CMR_BULK_READ_LADDER` | `workers.bulkRead.ladder` | string[] | `[]` | no |
+| `CMR_CODE_WRITE_LADDER` | `workers.codeWrite.ladder` | string[] | `[]` | no |
 | `CMR_HOOKS_ENABLED` | `hooks.enabled` | bool | `true` | no |
 | `CMR_HOOK_TIMEOUT_MS` | `hooks.timeoutMs` | int | `20000` | no |
 | `CMR_TASK_INTENT_SOURCE` | `hooks.taskIntent.source` | enum | `"none"` | no |

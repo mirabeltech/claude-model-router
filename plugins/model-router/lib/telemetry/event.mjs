@@ -160,6 +160,8 @@ export function buildEvent({
   // lib/verify/summary.mjs: null means "not checked", which is weaker than a `not_checkable`
   // verdict and must not be confused with it.
   verification = null,
+  // The escalation record, or null when the ladder was not used. See lib/hook/run.mjs.
+  escalation = null,
   questionText = null,
 
   primaryUsage = null,
@@ -481,6 +483,19 @@ export function buildEvent({
     summary_line_claims_wrong: toReportedCount(
       verification?.lineClaims?.wrong ?? null,
       'summary_line_claims_wrong',
+      warn,
+    ),
+
+    escalation_attempts: toReportedCount(escalation?.attempts ?? null, 'escalation_attempts', warn),
+    escalation_path: toText(escalation?.path ?? null, 'escalation_path', warn),
+    escalation_wasted_input_tokens: toReportedCount(
+      escalation?.wastedInputTokens ?? null,
+      'escalation_wasted_input_tokens',
+      warn,
+    ),
+    escalation_wasted_output_tokens: toReportedCount(
+      escalation?.wastedOutputTokens ?? null,
+      'escalation_wasted_output_tokens',
       warn,
     ),
 

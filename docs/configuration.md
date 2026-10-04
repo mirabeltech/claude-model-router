@@ -137,7 +137,7 @@ npm run budget               # the limits and the current UTC period's spend
 
 <!-- generated: everything below this line comes from SPEC. Do not edit by hand. -->
 
-Generated from `SPEC` in `plugins/model-router/lib/config.mjs`. 80 settings,
+Generated from `SPEC` in `plugins/model-router/lib/config.mjs`. 83 settings,
 config version 1. Regenerate with `npm run docs:config`; CI fails on a stale file.
 
 ### Master switch
@@ -177,6 +177,8 @@ Each lane may name its own worker. A lane that names a provider does NOT inherit
 | `workers.codeWrite.model` | string | `null` | non-empty, nullable | `CMR_CODE_WRITE_WORKER_MODEL` | Model for the code-writer mode. null inherits worker.model when the provider is also inherited, otherwise providers.<id>.model. |
 | `workers.codeWrite.apiKeyEnv` | string | `null` | non-empty, nullable | `CMR_CODE_WRITE_WORKER_API_KEY_ENV` | API key variable for the code-writer mode. null inherits worker.apiKeyEnv only when the provider is also inherited. |
 | `workers.codeWrite.timeoutMs` | int | `null` | min 1000, max 1800000, nullable | `CMR_CODE_WRITE_WORKER_TIMEOUT_MS` | Timeout for the code-writer mode. null inherits worker.timeoutMs; a millisecond budget carries no provider identity, so it always inherits. |
+| `workers.bulkRead.ladder` | string[] | `[]` | — | `CMR_BULK_READ_LADDER` | Escalation order for bulk reads: provider ids tried in turn when the previous answer fails verification. Empty means no escalation, which is the shipped behaviour. Claude itself is always the implicit last tier, because an exhausted ladder falls open to the developer own Read. |
+| `workers.codeWrite.ladder` | string[] | `[]` | — | `CMR_CODE_WRITE_LADDER` | Escalation order for the code-write lane. That lane is unreachable today, so this is declared and inert. |
 
 ### Providers
 
@@ -185,6 +187,7 @@ Per-provider endpoints and capabilities.
 | Setting | Type | Default | Range | Env var | Meaning |
 | --- | --- | --- | --- | --- | --- |
 | `providers.gemini.baseUrl` | string | `"https://generativelanguage.googleapis.com/v1beta"` | non-empty | `CMR_GEMINI_BASE_URL` | Gemini API base URL. Override to reach a proxy or a regional endpoint. |
+| `providers.gemini.model` | string | `"gemini-2.5-flash"` | non-empty | `CMR_GEMINI_MODEL` | Model used when a lane names the gemini provider without inheriting worker.model. gemini-2.5-flash is the middle of the three the bundled pricing table knows. |
 | `providers.ollama.baseUrl` | string | `"http://127.0.0.1:11434"` | non-empty | `CMR_OLLAMA_BASE_URL` | Ollama daemon URL. The default is loopback, so nothing leaves the machine. |
 | `providers.ollama.model` | string | `"qwen2.5-coder:7b"` | non-empty | `CMR_OLLAMA_MODEL` | Default Ollama model, used when a lane names the provider but no model of its own. |
 | `providers.ollama.contextTokens` | int | `null` | min 256, max 10000000, nullable | `CMR_OLLAMA_CONTEXT_TOKENS` | Context window of the Ollama model, in tokens. null means unknown, and unknown is never treated as infinite: the window is discovered from the daemon, then looked up in the bundled table, and a request that still cannot be shown to fit is refused rather than silently truncated. Set this to override both. |

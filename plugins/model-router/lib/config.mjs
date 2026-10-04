@@ -50,12 +50,38 @@ export const DEFAULTS = Object.freeze({
   // copied here and the two tables cannot drift. A model name and an env-var name only mean
   // something relative to a provider, so neither is inherited across a provider change.
   workers: {
-    bulkRead: { provider: null, model: null, apiKeyEnv: null, timeoutMs: null },
-    codeWrite: { provider: null, model: null, apiKeyEnv: null, timeoutMs: null },
+    // `ladder` is the ESCALATION ORDER: provider ids tried in turn when the answer from the one
+    // before it does not survive verification.
+    //
+    // EMPTY BY DEFAULT, and that is the point. An empty ladder is exactly today's behaviour — one
+    // worker, and a failure falls open to the developer's own Read. A default that escalated would
+    // spend money and send a file to a third party without being asked, which is what CLAUDE.md's
+    // eighth rule forbids.
+    //
+    // CLAUDE IS ALWAYS THE IMPLICIT LAST TIER: when the ladder is exhausted the hook falls open
+    // and the Read happens normally. So `['ollama', 'gemini']` is three tiers, not two.
+    //
+    // Each entry is a PROVIDER ID; its model comes from `providers.<id>.model`. The time budget
+    // in docs/escalation.md is what stops a slow first tier from consuming the whole hook
+    // deadline and then falling open anyway.
+    bulkRead: { provider: null, model: null, apiKeyEnv: null, timeoutMs: null, ladder: [] },
+    codeWrite: { provider: null, model: null, apiKeyEnv: null, timeoutMs: null, ladder: [] },
   },
 
   providers: {
-    gemini: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta' },
+    gemini: {
+      baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+      // Symmetric with providers.ollama.model, and NOT merely a convenience. `resolveWorker`
+      // reads `providers.<id>.model` whenever a lane's provider is not inherited from `worker`,
+      // so before this existed a lane naming `gemini` against a non-gemini base resolved to a
+      // NULL model and the dispatch failed with nothing useful to say. The escalation ladder
+      // makes that the normal case rather than a corner.
+      //
+      // flash rather than pro or flash-lite: it is the middle of the three the bundled pricing
+      // table knows, and the one worth escalating TO — stronger than a 7B local model, far
+      // cheaper than re-reading the file with the primary.
+      model: 'gemini-2.5-flash',
+    },
     ollama: {
       baseUrl: 'http://127.0.0.1:11434',
       model: 'qwen2.5-coder:7b',
@@ -295,6 +321,7 @@ export const SPEC = Object.freeze({
   'workers.codeWrite.timeoutMs': S('int', { env: 'CMR_CODE_WRITE_WORKER_TIMEOUT_MS', min: 1000, max: 1800000, nullable: true }),
 
   'providers.gemini.baseUrl': S('string', { env: 'CMR_GEMINI_BASE_URL', nonEmpty: true }),
+  'providers.gemini.model': S('string', { env: 'CMR_GEMINI_MODEL', nonEmpty: true }),
   'providers.ollama.baseUrl': S('string', { env: 'CMR_OLLAMA_BASE_URL', nonEmpty: true }),
   'providers.ollama.model': S('string', { env: 'CMR_OLLAMA_MODEL', nonEmpty: true }),
   // A window below the smallest useful answer is not a configuration, it is a typo.
@@ -321,6 +348,10 @@ export const SPEC = Object.freeze({
   'routing.allowGlobs': S('string[]', { env: 'CMR_ALLOW_GLOBS' }),
   'routing.neverDelegate.onTargetedRead': S('bool', { env: 'CMR_NEVER_ON_TARGETED_READ' }),
   'routing.neverDelegate.onRecentlyEdited': S('bool', { env: 'CMR_NEVER_ON_RECENTLY_EDITED' }),
+
+  // The escalation ladder, per lane: provider ids tried in order. Empty ships.
+  'workers.bulkRead.ladder': S('string[]', { env: 'CMR_BULK_READ_LADDER' }),
+  'workers.codeWrite.ladder': S('string[]', { env: 'CMR_CODE_WRITE_LADDER' }),
 
   'hooks.enabled': S('bool', { env: 'CMR_HOOKS_ENABLED' }),
   // The ceiling is below worker.timeoutMs's on purpose: a hook is not a place to wait 30 minutes.

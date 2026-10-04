@@ -125,6 +125,14 @@
               "maximum": 1800000,
               "default": null,
               "description": "Timeout for the bulk-reader mode. null inherits worker.timeoutMs; a millisecond budget carries no provider identity, so it always inherits. Env override: CMR_BULK_READ_WORKER_TIMEOUT_MS."
+            },
+            "ladder": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": [],
+              "description": "Escalation order for bulk reads: provider ids tried in turn when the previous answer fails verification. Empty means no escalation, which is the shipped behaviour. Claude itself is always the implicit last tier, because an exhausted ladder falls open to the developer own Read. Env override: CMR_BULK_READ_LADDER."
             }
           }
         },
@@ -168,6 +176,14 @@
               "maximum": 1800000,
               "default": null,
               "description": "Timeout for the code-writer mode. null inherits worker.timeoutMs; a millisecond budget carries no provider identity, so it always inherits. Env override: CMR_CODE_WRITE_WORKER_TIMEOUT_MS."
+            },
+            "ladder": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": [],
+              "description": "Escalation order for the code-write lane. That lane is unreachable today, so this is declared and inert. Env override: CMR_CODE_WRITE_LADDER."
             }
           }
         }
@@ -186,6 +202,12 @@
               "minLength": 1,
               "default": "https://generativelanguage.googleapis.com/v1beta",
               "description": "Gemini API base URL. Override to reach a proxy or a regional endpoint. Env override: CMR_GEMINI_BASE_URL."
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1,
+              "default": "gemini-2.5-flash",
+              "description": "Model used when a lane names the gemini provider without inheriting worker.model. gemini-2.5-flash is the middle of the three the bundled pricing table knows. Env override: CMR_GEMINI_MODEL."
             }
           }
         },

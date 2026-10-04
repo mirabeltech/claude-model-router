@@ -48,6 +48,26 @@ import { extractTaskIntent } from './intent.mjs'
 import { describeVerification, verifySummary } from '../verify/summary.mjs'
 import { toEventInputs } from './event.mjs'
 
+/**
+ * Verify one tier's answer against the file, or return null when verification is off.
+ *
+ * Wrapped, because a verifier that threw would break a hook and CLAUDE.md's third rule does not
+ * care that this one is pure. A throw falls back to the pre-verification behaviour: no verdict,
+ * so no escalation and no caveat.
+ */
+function verifyAnswer(result, config, filePath, content) {
+  if (config?.verify?.enabled === false) return null
+  try {
+    return verifySummary({
+      answer: result.text,
+      files: [{ path: filePath, content }],
+      maxUngroundedRatio: config?.verify?.maxUngroundedIdentifierRatio ?? 0.25,
+    })
+  } catch {
+    return null
+  }
+}
+
 /** Every way this can end. Returned for tests and for the doctor's self-check, never printed. */
 export const OUTCOMES = Object.freeze([
   'hooks_disabled',
@@ -149,6 +169,7 @@ export async function runReadHook({
         intentSource = null,
         governance = null,
         verification = null,
+        escalation = null,
       } = {},
     ) => {
       // A SUSPECT SUMMARY IS NOT SUBSTITUTED when the operator asked for `discard`: the response
@@ -180,6 +201,7 @@ export async function runReadHook({
               payload,
               corpusChars,
               verification,
+              escalation,
               // The task that was actually built, which is the generic literal unless the
               // developer opted in. Still governed by `telemetry.storeQuestionText`, which is
               // false by default, so recovered prompt text is not stored merely by being used.
@@ -297,25 +319,118 @@ export async function runReadHook({
     })
     const intentSource = taskIntent === null ? 'none' : 'transcript'
 
-    /* ---- the worker, under the HOOK's deadline rather than the worker's. ---- */
+    /* ---- the worker, or workers, under the HOOK's deadline rather than the worker's. ----
+     *
+     * THE ESCALATION LADDER. `workers.<lane>.ladder` is an ordered list of provider ids; an answer
+     * that does not survive verification escalates to the next one. The ladder ships EMPTY, which
+     * is exactly the single-worker behaviour this plugin has always had.
+     *
+     * CLAUDE IS ALWAYS THE LAST TIER, and it costs nothing to implement: when the ladder is
+     * exhausted this function falls open and the developer's own Read happens. So a two-entry
+     * ladder is three tiers.
+     *
+     * THE TIME BUDGET IS THE LOAD-BEARING PART, not the loop. Measured on the development machine,
+     * a 7B local model takes 80 to 113 seconds on a 900-byte file against a hook deadline whose
+     * MAXIMUM is 120 seconds. Without a budget check the ladder would spend the entire deadline on
+     * tier one, start tier two, get aborted, and fall open anyway — leaving the developer waiting
+     * two minutes for the Read they would have had immediately. That is strictly worse than not
+     * installing the plugin, so a tier is only attempted when enough deadline remains for it to
+     * plausibly finish.
+     */
 
-    const controller = new AbortController()
-    const budget = Number.isInteger(config?.hooks?.timeoutMs) ? config.hooks.timeoutMs : 20000
-    const timer = setTimeout(() => controller.abort(), budget)
-    timer.unref?.()
+    const deadlineMs = Number.isInteger(config?.hooks?.timeoutMs) ? config.hooks.timeoutMs : 20000
+    const startedAt = Date.now()
 
-    let result
-    try {
-      result = await dispatchImpl({
-        decision,
-        config,
-        input,
-        signal: controller.signal,
-        env,
-      })
-    } finally {
-      clearTimeout(timer)
+    /** The ladder, or a single-element ladder standing for the configured worker. */
+    // Trimmed before filtering: `string[]` coercion accepts any strings, so a hand-edited config
+    // holding `'  '` or `' ollama '` reaches here. A whitespace-only entry is not a provider, and
+    // dispatching it would waste a tier on a certainty.
+    const ladder = Array.isArray(config?.workers?.bulkRead?.ladder)
+      ? config.workers.bulkRead.ladder
+          .filter((id) => typeof id === 'string')
+          .map((id) => id.trim())
+          .filter((id) => id !== '')
+      : []
+    const tiers = ladder.length > 0 ? ladder : [null]
+
+    /**
+     * How long a tier needs before it is worth starting.
+     *
+     * A fraction of what is left rather than a fixed number, because the tiers differ by orders of
+     * magnitude: a hosted model answers in seconds and a local one in minutes. Requiring a quarter
+     * of the original deadline is a crude floor that stops a doomed attempt without pretending to
+     * predict a latency this code cannot know.
+     */
+    const MIN_TIER_FRACTION = 0.25
+    const remainingMs = () => deadlineMs - (Date.now() - startedAt)
+
+    let result = null
+    let attempts = 0
+    const path = []
+    // Usage spent on answers that were DISCARDED. Those tokens were really consumed, so they are
+    // recorded rather than forgotten — a ladder that hid its own waste would understate what
+    // delegation costs, which is the thing this project refuses to do anywhere else.
+    let wastedInput = 0
+    let wastedOutput = 0
+    let lastVerification = null
+
+    for (const [index, tierProvider] of tiers.entries()) {
+      if (index > 0 && remainingMs() < deadlineMs * MIN_TIER_FRACTION) {
+        // Out of time. Stop rather than start an attempt that will be aborted.
+        path.push('out_of_time')
+        break
+      }
+
+      const tierConfig =
+        tierProvider === null
+          ? config
+          : { ...config, workers: { ...config.workers, bulkRead: { ...config.workers?.bulkRead, provider: tierProvider, model: null, apiKeyEnv: null } } }
+
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), Math.max(1000, remainingMs()))
+      timer.unref?.()
+      let attempt
+      try {
+        attempt = await dispatchImpl({
+          decision,
+          config: tierConfig,
+          input,
+          signal: controller.signal,
+          env,
+        })
+      } finally {
+        clearTimeout(timer)
+      }
+
+      attempts += 1
+      path.push(attempt?.provider ?? tierProvider ?? 'unknown')
+      result = attempt
+
+      // A tier that errored escalates. A tier that answered is verified, and only an answer whose
+      // claims contradict the file escalates — see lib/verify/summary.mjs.
+      if (attempt?.status === 'ok') {
+        lastVerification = verifyAnswer(attempt, config, filePath, content.content)
+        const suspect =
+          lastVerification?.verdict === 'suspect' && config?.verify?.onSuspect !== 'off'
+        if (!suspect) break
+      }
+
+      // This answer is being abandoned, so its tokens are waste rather than spend-for-value.
+      if (index < tiers.length - 1) {
+        wastedInput += attempt?.usage?.inputTokens ?? 0
+        wastedOutput += attempt?.usage?.outputTokens ?? 0
+      }
     }
+
+    const escalation =
+      tiers.length > 1 || attempts > 1
+        ? Object.freeze({
+            attempts,
+            path: path.join('>'),
+            wastedInputTokens: wastedInput === 0 ? null : wastedInput,
+            wastedOutputTokens: wastedOutput === 0 ? null : wastedOutput,
+          })
+        : null
 
     /* ---- accounting. Measured facts only, and exactly once. ----
      *
@@ -367,18 +482,9 @@ export async function runReadHook({
      * does not care that this one is pure. A throw here must fall back to the pre-verification
      * behaviour, which is to substitute the answer.
      */
-    let verification = null
-    if (result.status === 'ok' && config?.verify?.enabled !== false) {
-      try {
-        verification = verifySummary({
-          answer: result.text,
-          files: [{ path: filePath, content: content.content }],
-          maxUngroundedRatio: config?.verify?.maxUngroundedIdentifierRatio ?? 0.25,
-        })
-      } catch {
-        verification = null
-      }
-    }
+    // Computed inside the ladder loop above, because the verdict is what decides whether to
+    // escalate. The last tier's verdict is the one that describes the answer actually returned.
+    const verification = lastVerification
 
     const stamps = {
       corpusChars: content.content.length,
@@ -386,6 +492,7 @@ export async function runReadHook({
       intentSource,
       governance: accounted,
       verification,
+      escalation,
     }
     if (result.status !== 'ok') return record('worker_failed', { result, ...stamps })
     if (verification?.verdict === 'suspect' && config?.verify?.onSuspect === 'discard') {

@@ -35,7 +35,27 @@ test('no shipped default is copied into the workers block, so the two tables can
       model: null,
       apiKeyEnv: null,
       timeoutMs: null,
+      ladder: [],
     })
+  }
+})
+
+test('every INHERITING lane field is null, and ladder has no counterpart to inherit from', () => {
+  // The property the test above pins by shape, stated so a shape change cannot quietly weaken it.
+  // The four inheritance-bearing fields must be null, or the lane table would hold a second copy
+  // of a default that lives in `worker` and the two could drift apart.
+  //
+  // `ladder` is exempt BECAUSE THERE IS NO `worker.ladder` to drift from: escalation is a lane
+  // property with no global counterpart, so an empty array is its own default rather than a copy
+  // of one. If a `worker.ladder` is ever added, this assertion fails and that is correct — the
+  // exemption would no longer hold.
+  for (const lane of ['bulkRead', 'codeWrite']) {
+    for (const field of ['provider', 'model', 'apiKeyEnv', 'timeoutMs']) {
+      assert.equal(DEFAULTS.workers[lane][field], null, `workers.${lane}.${field}`)
+      assert.ok(field in DEFAULTS.worker, `worker.${field} is the value it must not duplicate`)
+    }
+    assert.deepEqual(DEFAULTS.workers[lane].ladder, [])
+    assert.equal('ladder' in DEFAULTS.worker, false, 'a worker.ladder would make the exemption wrong')
   }
 })
 
