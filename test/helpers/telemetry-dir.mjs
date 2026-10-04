@@ -24,15 +24,35 @@ export const FROZEN_DATE = '2026-03-04'
 export const REPO_ROOT = path.resolve(fileURLToPath(new URL('../..', import.meta.url)))
 export const TMP_ROOT = path.join(REPO_ROOT, 'test', '.tmp')
 
-/** A fresh empty directory under test/.tmp, removed by cleanup(). */
+/**
+ * A fresh empty directory under test/.tmp, removed by cleanup().
+ *
+ * WHY cleanup() RETRIES. On Windows a directory cannot be removed while any handle into it is
+ * open, and the suites that spawn child writers — governance.concurrency, telemetry.concurrency —
+ * call cleanup() as soon as the last child reports, which is before the OS has finished tearing
+ * those processes down. `force: true` only suppresses ENOENT, so the EBUSY or EPERM propagated and
+ * the directory was left behind: a full run was leaving sixteen scratch directories under
+ * test/.tmp, each holding a ledger and a lock file.
+ *
+ * `maxRetries` with a delay is the documented remedy, and it is also why cleanup() never throws.
+ * A test must not fail because the filesystem was slow to let go of a directory it no longer
+ * needs, and a leaked scratch directory must not be invisible either — hence the sweep in
+ * test/resources.test.mjs, which asserts the tree is empty after a run.
+ */
 export function makeTempDir(label) {
   const dir = path.join(TMP_ROOT, `${label}-${process.pid}-${crypto.randomBytes(4).toString('hex')}`)
-  fs.rmSync(dir, { recursive: true, force: true })
+  const remove = () => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+  remove()
   fs.mkdirSync(dir, { recursive: true })
   return {
     dir,
     cleanup() {
-      fs.rmSync(dir, { recursive: true, force: true })
+      try {
+        remove()
+      } catch {
+        // Last resort only. A scratch directory that outlives its test is a hygiene problem, not
+        // a correctness one, and failing the test here would report the wrong defect.
+      }
     },
   }
 }

@@ -236,12 +236,18 @@ test('B. an exhausted budget refuses, and the row says which budget and how much
   // A token budget of 1 against a 48 KB file. `onExceed: disable` is the strict setting; the
   // SHIPPED default is that no limit exists at all, so this row is only reachable by configuring
   // one, which is the point of asserting it.
+  //
+  // The ledger goes in its own scratch directory, cleaned up alongside the workspace. An earlier
+  // draft created it with makeTempDir() inline and never cleaned it, which is exactly the leak
+  // this phase fixed in the helper — so leaving it would have been the one remaining example of
+  // the thing being fixed.
+  const govTmp = makeTempDir('refuse-budget-state')
   const r = await drive('refuse-budget', {
     env: {
       CMR_BUDGET_ENABLED: 'true',
       CMR_RUN_MAX_TOTAL_TOKENS: '1',
       CMR_BUDGET_ON_EXCEED: 'disable',
-      CMR_BUDGET_STATE_DIR: path.join(makeTempDir('refuse-budget-state').dir, 'gov'),
+      CMR_BUDGET_STATE_DIR: path.join(govTmp.dir, 'gov'),
     },
   })
   try {
@@ -266,6 +272,7 @@ test('B. an exhausted budget refuses, and the row says which budget and how much
     assert.equal(row.reservation_status, 'none', 'a denied call reserves nothing')
   } finally {
     r.cleanup()
+    govTmp.cleanup()
   }
 })
 
