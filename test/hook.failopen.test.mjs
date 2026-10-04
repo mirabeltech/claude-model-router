@@ -178,6 +178,64 @@ test('a filesystem that throws on everything falls open', async () => {
   assert.equal(r.response, null)
 })
 
+/* ------------------------------------------------------------- governance */
+
+test('a broken ledger under a CONFIGURED budget still delegates, and the row says why', async () => {
+  // The row the existing lying-fs test above CANNOT reach. Under the shipped configuration every
+  // budget limit is null, so checkBudget() short-circuits on a pure object walk and never opens
+  // the ledger — which is the whole point of that design, and also why a hostile fs proves nothing
+  // about governance unless a limit is actually set.
+  //
+  // So: one configured TOKEN limit (a cost limit would be resolved as `cost_unknown` before the
+  // ledger is ever read), and a readFileSync that fails. The session must be unaffected.
+  const budgeted = hookConfig({
+    budget: {
+      enabled: true,
+      run: { maxWorkerCostUsd: null, maxInputTokens: null, maxOutputTokens: null, maxTotalTokens: 1_000_000 },
+      daily: { maxWorkerCostUsd: null, maxTotalTokens: null },
+      monthly: { maxWorkerCostUsd: null, maxTotalTokens: null },
+      onExceed: 'disable',
+      onUnknownCost: 'allow',
+      onUnknownUsage: 'allow',
+      stateDir: 'C:/governance/never/writable',
+      stateDirResolved: 'C:/governance/never/writable',
+    },
+  })
+
+  const rows = []
+  const r = await run({
+    config: budgeted,
+    fs: {
+      ...fs,
+      readFileSync: (p, ...rest) => {
+        // Only the LEDGER read fails. The hook still has to read the file it is delegating and the
+        // transcript it checks for recent edits, so failing every read would test a different row.
+        if (String(p).includes('governance') || String(p).endsWith('ledger.json')) {
+          throw Object.assign(new Error('nope'), { code: 'EACCES' })
+        }
+        return fs.readFileSync(p, ...rest)
+      },
+    },
+    emit: (row) => {
+      rows.push(row)
+      return null
+    },
+  })
+
+  assert.equal(r.outcome, 'delegated', 'a storage problem must not stop a delegation')
+  assert.ok(r.response, 'and the answer still reaches Claude Code')
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].governance.decision, 'allow')
+  assert.equal(rows[0].governance.reason, 'invalid_budget')
+  assert.equal(
+    rows[0].governance.measurementStatus,
+    'unavailable',
+    'the row must not claim a budget it could not read',
+  )
+  assert.equal(rows[0].governance.remaining, null, 'and remaining is null, never 0')
+  assert.equal(rows[0].governance.reservationStatus, 'none', 'nothing was reserved, so nothing settles')
+})
+
 /* ------------------------------------------------------- the layers throwing */
 
 test('a throwing gate falls open, even though the gate is specified never to throw', async () => {

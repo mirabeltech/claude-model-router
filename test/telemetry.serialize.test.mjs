@@ -303,3 +303,52 @@ test('the carcass is reached only after the ladder has been exhausted', () => {
   assert.equal(steps.at(-1), 'carcass')
   assert.ok(steps.length > 1, 'the ladder must be tried first')
 })
+
+/* ----------------------------------------------- the two ways serialization gives up */
+
+/**
+ * SAFE REFUSAL, both of them. These are the only two paths on which `serializeRecord` returns
+ * `line: null`, and neither was reachable from any test before this: grepping `carcass_over_cap`
+ * and `serialize_failed` across test/ found nothing.
+ *
+ * Refusal rather than fail-open is correct here, and it is the one place in the write path where
+ * that is true. A half-written record would corrupt every reader of the file, because the format's
+ * whole guarantee is one record per line; writing nothing loses one row and costs a counter.
+ */
+
+test('a cap too small even for the carcass refuses, rather than writing a partial record', () => {
+  // The carcass is already the floor: required keys only, strings clamped to CARCASS_STRING_BYTES.
+  // Below that there is nothing left to shed, and the honest answer is to write no bytes at all.
+  const { line, bytes, truncation, problems } = serializeRecord(base(), { recordCapBytes: 100 })
+  assert.equal(line, null, 'no buffer, so the sink writes nothing')
+  assert.equal(bytes, 0)
+  assert.equal(truncation, null)
+  assert.deepEqual(problems.filter((p) => p === 'carcass_over_cap'), ['carcass_over_cap'])
+})
+
+test('a field that throws while being read is caught and named, never propagated', () => {
+  // projectRecord() reads src[field] for every declared field, so a getter that throws on a
+  // DECLARED field is the one way to make serialization fail from outside. It has to be a declared
+  // field: a getter on `smuggled` is never read, so it would prove nothing.
+  //
+  // The reason carries err.code ?? err.name, which is why the assertion names TypeError rather
+  // than matching loosely — the discriminator is the only thing that makes this row diagnosable.
+  const hostile = base()
+  Object.defineProperty(hostile, 'session_id', {
+    enumerable: true,
+    get() { throw new TypeError('hostile getter') },
+  })
+  const { line, bytes, problems } = serializeRecord(hostile)
+  assert.equal(line, null)
+  assert.equal(bytes, 0)
+  assert.deepEqual(problems, ['serialize_failed:TypeError'])
+})
+
+test('an errno on a declared field is reported by code, because a code is more use than a name', () => {
+  const hostile = base()
+  Object.defineProperty(hostile, 'task_id', {
+    enumerable: true,
+    get() { throw Object.assign(new Error('nope'), { code: 'EIO' }) },
+  })
+  assert.deepEqual(serializeRecord(hostile).problems, ['serialize_failed:EIO'])
+})

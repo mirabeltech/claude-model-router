@@ -247,6 +247,32 @@ test('apiKeyEnv renames the variable a provider needs', () => {
   assert.equal(workerAvailability(config, { MY_OWN_KEY: 'k' }).workerAvailable, true)
 })
 
+test('an environment that throws on read is unavailable, with nothing invented', () => {
+  // The catch in workerAvailability(). Driven with a hostile `env` rather than a hostile config,
+  // because `env` is the only argument that comes from outside the process's own construction.
+  //
+  // THE DISCRIMINATOR MATTERS, and it is why this uses a RESOLVABLE provider. The "no key" path
+  // returns provider 'gemini' with its model and billing filled in; the catch returns all three as
+  // null. With an unresolvable provider in the config the two paths look identical, and the test
+  // would pass without ever reaching the catch.
+  const config = hookConfig({ worker: { provider: 'gemini', apiKeyEnv: 'GEMINI_API_KEY' } })
+
+  const noKey = workerAvailability(config, {})
+  assert.equal(noKey.provider, 'gemini', 'the readiness path still knows which worker it was')
+  assert.equal(noKey.billing, 'metered')
+
+  const threw = workerAvailability(config, new Proxy({}, {
+    get() {
+      throw new Error('the environment is hostile')
+    },
+  }))
+  assert.equal(threw.workerAvailable, false, 'unavailable, and the session is unaffected')
+  assert.equal(threw.workerUnavailableReason, 'worker_not_ready')
+  assert.equal(threw.provider, null, 'and NOTHING is claimed about a worker we failed to inspect')
+  assert.equal(threw.model, null)
+  assert.equal(threw.billing, null, 'a null billing is what keeps governance from assuming free')
+})
+
 test('an unknown or missing provider is unavailable, never assumed', () => {
   for (const provider of ['nope', '', null, undefined]) {
     const config = hookConfig()

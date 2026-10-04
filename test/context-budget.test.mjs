@@ -423,12 +423,38 @@ test('a shortfall inside the tolerance is not called truncation', () => {
   assert.equal(over.truncated, true)
 })
 
-test('an unmeasured call is null, never a reassuring false', () => {
+test('an unmeasured call is null, never a reassuring false, and says WHICH half is missing', () => {
+  // The `reason` assertions are the point of this test, not decoration. Without them these three
+  // cases were indistinguishable from each other: all that was checked was `truncated === null`,
+  // so swapping `prompt_count_missing` and `estimate_unknown` in the product code would have
+  // failed nothing. Two unknowns with one name is one unknown, and the two are not the same
+  // problem — a missing prompt count means the provider did not report, while a missing estimate
+  // means we never computed a budget for this call at all.
   const caps = { silentInputTruncation: true }
-  assert.equal(detectSilentTruncation({ budget: { requestedInputTokens: 100 }, usage: { inputTokens: null }, capabilities: caps }).truncated, null)
-  assert.equal(detectSilentTruncation({ budget: { requestedInputTokens: 100 }, usage: null, capabilities: caps }).truncated, null)
-  assert.equal(detectSilentTruncation({ budget: null, usage: { inputTokens: 100 }, capabilities: caps }).truncated, null)
-  assert.equal(detectSilentTruncation({}).truncated, false, 'no capability to truncate => not possible')
+
+  const noCount = detectSilentTruncation({ budget: { requestedInputTokens: 100 }, usage: { inputTokens: null }, capabilities: caps })
+  assert.equal(noCount.truncated, null)
+  assert.equal(noCount.reason, 'prompt_count_missing')
+  assert.equal(noCount.estimatedPromptTokens, 100, 'the half we DO have is still reported')
+  assert.equal(noCount.observedPromptTokens, null)
+
+  const noUsage = detectSilentTruncation({ budget: { requestedInputTokens: 100 }, usage: null, capabilities: caps })
+  assert.equal(noUsage.truncated, null)
+  assert.equal(noUsage.reason, 'prompt_count_missing', 'no usage object at all is the same gap')
+
+  const noEstimate = detectSilentTruncation({ budget: null, usage: { inputTokens: 100 }, capabilities: caps })
+  assert.equal(noEstimate.truncated, null)
+  assert.equal(noEstimate.reason, 'estimate_unknown')
+  assert.equal(noEstimate.estimatedPromptTokens, null)
+  assert.equal(noEstimate.observedPromptTokens, 100)
+
+  // Checked in the order the function checks them: a call missing BOTH halves reports the count,
+  // because without an observation there is nothing to compare an estimate against anyway.
+  assert.equal(detectSilentTruncation({ budget: null, usage: null, capabilities: caps }).reason, 'prompt_count_missing')
+
+  const impossible = detectSilentTruncation({})
+  assert.equal(impossible.truncated, false, 'no capability to truncate => not possible')
+  assert.equal(impossible.reason, 'not_possible', 'and that false is a reading, not an absence')
 })
 
 test('a provider that errors on overflow cannot have truncated silently', () => {

@@ -120,6 +120,32 @@ test('the entry point writes to stdout exactly once, and never uses exit code 2'
   assert.match(code, /process\.exit\(0\)/, 'the hook always reports success')
 })
 
+test('the entry point keeps its whole job inside the try, and exit 0 outside it', () => {
+  // THE BARE `catch {}` IS NOT REACHABLE FROM THE PROCESS BOUNDARY, and no test pretends it is.
+  // Every call inside the try is specified never to throw: runReadHook has its own outer catch
+  // returning `hook_threw`, and loadConfig swallows per layer — readJsonLayer catches both the
+  // read and the parse and turns a non-ENOENT code into a warning. What is left is an EPIPE on a
+  // reader that closed first, which is timing-dependent and not drivable cross-platform.
+  //
+  // So this asserts the property the catch EXISTS to preserve, which is checkable: the config
+  // load and the one write are inside it, and `process.exit(0)` is outside it. Moving the exit
+  // inside the try would mean a throw skipped it; moving the write outside would mean a throw
+  // after a partial write still exited 0 with half a JSON object on stdout.
+  const code = stripComments(fs.readFileSync(path.join(HOOKS_DIR, 'pre-tool-use.mjs'), 'utf8'))
+  const tryAt = code.indexOf('try {')
+  const catchAt = code.lastIndexOf('} catch')
+  assert.ok(tryAt !== -1 && catchAt > tryAt, 'the entry point must have exactly one try/catch')
+
+  const inside = code.slice(tryAt, catchAt)
+  assert.match(inside, /writeSync\(1/, 'the one write belongs inside the try')
+  assert.match(inside, /loadConfig\(\)/, 'and so does the config load')
+  assert.match(inside, /runReadHook\(/, 'and the call that does the work')
+
+  const after = code.slice(catchAt)
+  assert.match(after, /process\.exit\(0\)/, 'exit 0 is reached whether or not the try threw')
+  assert.equal(/process\.exit/.test(inside), false, 'nothing exits from inside the try')
+})
+
 /* ------------------------------------------------------ the architecture edges */
 
 test('no engine layer imports the hook layer, so the dependency runs one way only', () => {
