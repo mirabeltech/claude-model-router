@@ -230,6 +230,18 @@ export const DEFAULTS = Object.freeze({
  * overlay, so the two can never disagree about a field's type or legal values.
  */
 
+/**
+ * A value's KIND, for a rejection message that must not quote the value.
+ *
+ * `typeof` alone calls an array an object and null an object, which is the one distinction an
+ * operator looking at a config file actually needs.
+ */
+const describeType = (v) => {
+  if (v === null) return 'null'
+  if (Array.isArray(v)) return 'an array'
+  return typeof v
+}
+
 const S = (type, extra = {}) => ({ type, ...extra })
 
 export const SPEC = Object.freeze({
@@ -417,7 +429,13 @@ export function coerceLeaf(spec, raw, { fromEnv = false } = {}) {
         n = Number(raw)
       }
       if (typeof n !== 'number' || !Number.isFinite(n)) {
-        return { ok: false, reason: `expected ${spec.type}, got ${JSON.stringify(raw)}` }
+        // THE TYPE, NEVER THE VALUE. This was the one branch in this function that echoed the
+        // rejected value back, and a warning is printed by `doctor` and lands in whatever a
+        // developer pastes into a bug report. A key mistyped into a numeric field — there is no
+        // field that holds a credential, so a key in a config file is always a mistake — would
+        // have been echoed verbatim. The field name is already on the warning, so the type alone
+        // is just as actionable, and every other branch here already reports only a type.
+        return { ok: false, reason: `expected ${spec.type}, got ${describeType(raw)}` }
       }
       if (spec.type === 'int' && !Number.isInteger(n)) return { ok: false, reason: 'expected an integer' }
       if (spec.min !== undefined && n < spec.min) return { ok: false, reason: `below minimum ${spec.min}` }
