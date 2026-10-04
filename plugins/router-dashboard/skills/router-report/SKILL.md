@@ -5,7 +5,7 @@ description: Render or explain a model-router delegation report. Use when the us
 
 # Router report
 
-Answers one question — **what did delegation actually do, over a window you choose?** — and
+Answers one question — **what did delegation do, over a window you choose?** — and
 answers it from telemetry that already exists. It computes no cost, prices no model, calls no
 worker and changes no configuration.
 
@@ -63,5 +63,8 @@ Say so plainly rather than estimating:
 
 This report is observational. It never changes a routing threshold, a budget, a provider default
 or any other configuration, and it must not be used to do so: see
-[`docs/analytics.md`](../../../../docs/analytics.md) for the metric definitions and
-[`docs/savings-methodology.md`](../../../../docs/savings-methodology.md) for the two nets.
+[docs/analytics.md](https://github.com/mirabeltech/claude-model-router/blob/main/docs/analytics.md)
+for the metric definitions and
+[docs/savings-methodology.md](https://github.com/mirabeltech/claude-model-router/blob/main/docs/savings-methodology.md)
+for the two nets. (Absolute links on purpose: once this plugin is installed under
+`~/.claude/plugins/`, a relative path out of the skill directory resolves to nothing.)

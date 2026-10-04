@@ -142,7 +142,8 @@ task, and no `lib/` module may import the hook layer — the dependency runs one
 
 Deterministic: same input, same output, byte for byte. No clock, no randomness, no model call. Every
 string is built with `join('\n')`, never a multi-line template literal, because `core.autocrlf` is
-on with no `.gitattributes` and CI gates both platforms.
+on and CI gates both platforms. `.gitattributes` normalises the repository as well, but an explicit
+join holds regardless of whether that setting is in force.
 
 ### The bulk-reader request, with intent
 

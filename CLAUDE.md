@@ -115,7 +115,21 @@ what it saved. Two plugins: `model-router` (writer) and `router-dashboard` (read
   "it cannot read a store" structural rather than a policy; `scripts/collect.mjs` is the single
   file permitted to spawn, because `npm run report` has to be one command and a spawn is not an
   import.
-- `test/` — `node --test`. `test/behavioural/` drives real `claude -p` sessions.
+- `plugins/model-router/lib/doctor/` — the diagnostic's SEVERITY MODEL, pure. `report.mjs` decides
+  what is PASS/WARN/FAIL/INFO and `scripts/doctor.mjs` only renders it, the same split
+  `governance/policy.mjs` already uses. The one judgement worth knowing: a missing API key is a
+  WARN when nobody named the provider (the shipped default) and a FAIL when somebody did, because
+  "not set up yet" and "broken" are different states and flattening them made every clean install
+  exit 1. `LEVEL_FROM_GOVERNANCE` is the only place a governance level becomes a doctor level.
+- `plugins/model-router/lib/cli.mjs` — one flag parser, colour policy and exit-code table for this
+  plugin's commands. `router-dashboard/scripts/report.mjs` may NOT import it; that boundary is
+  statically pinned, so the shared contract is enforced by `test/cli.contract.test.mjs` instead.
+- `plugins/model-router/lib/env-registry.mjs` — every environment variable `SPEC` does not own.
+  A frozen module rather than prose, because `test/env.inventory.test.mjs` compares it against a
+  source scan in both directions.
+- `docs/` — [`docs/README.md`](docs/README.md) is the index. `configuration.md`'s table and all of
+  `environment.md` are GENERATED; never hand-edit below the sentinel.
+- `test/` — `node --test`. `test/behavioural/` holds cases but no runner yet.
 - `test/evals/` — the evaluation framework, and `test/fixtures/evals/` its corpus. It measures the
   router and never changes it: it calls `buildEvent()` but never `emitEvent()`, never reads the user's
   config, and exports no notion of a better threshold. `evals.isolation.test.mjs` enforces all three
@@ -142,9 +156,24 @@ npm run doctor           # diagnose config, provider, capability, hook, telemetr
 npm run budget           # read-only: current limits, UTC period and spend
 npm run analytics        # read-only: what delegation did over a window. --json pipes to report
 npm run report           # one self-contained HTML report; prints its path
+npm run prune            # retention sweep. Report-only without --apply
+npm run smoke:hook       # drives the REAL hook against a REAL worker
 npm run validate         # claude plugin validate --strict on all three manifests
-npm run test:behavioural # real sessions graded over stream-json (phase 8, not yet written)
 npm run evals            # deterministic benchmark: offline, keyless, reproducible
 npm run evals:sweep      # the same, plus the threshold sweep
 npm run evals:build      # regenerate the corpus after editing the manifest
 ```
+
+Four generated files, each gated in CI by `git diff --exit-code`. A stale one fails the build, and
+`docs:config` additionally REFUSES to run when a SPEC leaf has no description.
+
+```bash
+npm run gen:schema       # lib/config.schema.json          after changing SPEC
+npm run docs:config      # the table in docs/configuration.md   after changing SPEC
+npm run docs:env         # docs/environment.md              after changing SPEC or env-registry
+npm run sync:version     # both plugin manifests, 3 marketplace fields, 2 lib/version.mjs
+```
+
+`npm run test:behavioural` and `npm run ingest` were REMOVED in phase 11: both pointed at files
+that do not exist, and a documented command that cannot run is worse than an absent feature.
+`test/packaging.test.mjs` now fails if any npm script names a missing target.

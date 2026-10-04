@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest a change
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Worth knowing which things are deliberate rather than missing, because several
+        plausible-sounding requests are decisions recorded on the record:
+
+        - **No npm dependency** will be added. Node stdlib only.
+        - **Nothing guesses a number.** An unpriced model, an unmeasured context window and an
+          unreported usage figure are `null`, never `0` and never an estimate shown as a
+          measurement.
+        - **Reasoning work is not delegated**, and changing a threshold needs a negative eval
+          proving the refusals still hold.
+        - **The gate fails open.** A request to make it fail closed, or to block a read, is
+          out of scope.
+
+        See CONTRIBUTING.md and docs/architecture.md.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you hitting?
+      description: The situation, not the solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like instead?
+    validations:
+      required: true

@@ -1,0 +1,50 @@
+name: Bug report
+description: Something does not work the way it is documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before anything else:** if a read is not being delegated, that may well be correct. The
+        routing gate fails open on every branch, so the usual symptom of a misconfiguration is
+        silence rather than an error. `npm run doctor` is how to tell "not delegating" from
+        "not installed" — and its output is the single most useful thing you can attach.
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of the diagnostic
+      description: |
+        Run `npm run doctor -- --json --offline` from a clone, or `/model-router:doctor` inside a
+        session. **This is safe to paste:** no secret is ever printed, only whether a key is
+        present, its length and its first four characters. `--offline` makes it deterministic by
+        skipping the provider probe.
+      render: json
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what happened instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: The file or read that should have been delegated, and anything non-default in your config. Please redact nothing except secrets — a path or a threshold is usually the answer.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How is it installed?
+      options:
+        - marketplace (claude plugin install)
+        - repo checkout (npm run ...)
+        - dev loop (--plugin-dir)
+    validations:
+      required: true

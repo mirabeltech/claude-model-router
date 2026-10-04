@@ -261,8 +261,9 @@ that returned value rather than the module constant, because a row carrying extr
 must say so or a reader will subtract it from a generic row.
 
 Every template is built with `join('\n')`, never a multi-line template literal. `core.autocrlf` is
-on and there is no `.gitattributes`, so a literal would hold `\r\n` in a Windows checkout and `\n`
-in a Linux one — and CI gates on both.
+on, so a literal would hold `\r\n` in a Windows checkout and `\n` in a Linux one — and CI gates on
+both. `.gitattributes` now normalises the repository too, but an explicit join does not depend on a
+repository setting being in force.
 
 The bulk-reader is **not** told to produce a particular answer SHAPE. Imposing a serialization
 format would be an artificial semantic interpretation of an answer this layer does not read, and

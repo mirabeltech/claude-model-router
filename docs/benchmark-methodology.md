@@ -274,9 +274,11 @@ rather than in a commit message.
    measurable only at the dispatch layer, so the corpus cannot claim either through the hook.
 3. **Nothing redacts outbound file content.** The filename deny list is the only control. Pinned as
    a declared exposure rather than fixed, because fixing it would change the dispatch path.
-4. **Committed fixture bytes are not checkout-invariant.** `core.autocrlf` is effectively true and
-   there is no `.gitattributes`. Generated fixtures sidestep it; the four committed ones are
-   LF-normalised before measurement, which is a mitigation rather than a cure.
+4. **Committed fixture bytes depend on the checkout.** `core.autocrlf` is effectively true on
+   Windows. `.gitattributes` now pins `* text=auto eol=lf` and names the fixture trees explicitly,
+   so a fresh checkout is LF everywhere — but that is a repository setting a consumer can override,
+   not a property of the bytes. Generated fixtures sidestep it entirely; the four committed ones are
+   also LF-normalised before measurement.
 5. **`tz_offset_minutes` is machine-local**, so the golden artifact is a projection.
 6. **`mock` caps a payload at 64 000 bytes.** The loader rejects a dispatch case over 60 000 with a
    named error, so a contributor adding a 70 KB fixture is told why rather than blaming the provider.

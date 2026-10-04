@@ -156,7 +156,7 @@ asserted inputs in the plugin, and the off-switches live elsewhere (`hooks.enabl
 `routing.bulkRead.enforce`, `CMR_ENABLED`). `recentlyEdited` is genuinely measured, from the
 session transcript, because it guards content rather than describing posture.
 
-## Task intent does not change what we refuse (Phase 7)
+## Task intent does not change what we refuse
 
 The hook can now forward the developer's newest prompt to the worker as the question, when
 `hooks.taskIntent.source` is set to `transcript`. It is `none` by default.

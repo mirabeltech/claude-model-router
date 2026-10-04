@@ -227,7 +227,7 @@ measured.
 | `validation_warnings` | int | Count of fields nulled at the boundary. `0` normally. |
 | `validation_codes` | string\|null | Sorted, de-duplicated, comma-joined, e.g. `negative:input_bytes`. |
 
-### Governance (phase 9)
+### Governance
 
 Eight columns, all nullable, added **additively** — `schema_version` stays `1` and `calc_version`
 stays `1`, so a reader built against the phase-8 schema sees eight keys it does not know and

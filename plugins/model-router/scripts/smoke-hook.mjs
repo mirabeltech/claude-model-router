@@ -31,6 +31,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { DEFAULTS } from '../lib/config.mjs'
+
 const PLUGIN_ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
 const REPO_ROOT = path.resolve(PLUGIN_ROOT, '..', '..')
 
@@ -41,7 +43,10 @@ const opt = (name, dflt) => {
 }
 
 const provider = opt('provider', 'ollama')
-const model = opt('model', provider === 'ollama' ? 'llama3:latest' : null)
+// Defaults to the SAME model as `providers.ollama.model`, deliberately. These disagreed
+// (llama3:latest here, qwen2.5-coder:7b there), which meant the quickstart told a reader to pull
+// one model and then the smoke test asked for another.
+const model = opt('model', provider === 'ollama' ? DEFAULTS.providers.ollama.model : null)
 const file = path.resolve(REPO_ROOT, opt('file', 'test/fixtures/corpus/large.ts'))
 
 if (!fs.existsSync(file)) {

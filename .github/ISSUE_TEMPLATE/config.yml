@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: https://github.com/mirabeltech/claude-model-router/blob/main/SECURITY.md
+    about: This plugin sends file contents to a third-party model. Please report anything that exposes data privately, by email, rather than in a public issue.
+  - name: Troubleshooting
+    url: https://github.com/mirabeltech/claude-model-router/blob/main/docs/troubleshooting.md
+    about: Thirteen common failures, each with its cause, the check to run and its fallback behaviour.

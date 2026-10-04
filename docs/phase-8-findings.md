@@ -1,5 +1,10 @@
 # Phase 8 findings
 
+**A dated lab notebook, not a reference.** The phase number is the honest label for *when* these
+measurements were taken, and they are not re-run as the code changes — so read this as a record of
+what was observed then, and the reference docs for what is true now. Several of these findings are
+why a rule exists; [architecture.md](architecture.md) says which.
+
 Evidence first, then exactly one verdict. This document does not change production policy;
 `docs/benchmark-methodology.md` holds the standing rule that a benchmark result never does.
 

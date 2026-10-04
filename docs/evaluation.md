@@ -96,8 +96,10 @@ Pinned by [`evals.protected.test.mjs`](../test/evals.protected.test.mjs).
 
 ### Why `generated` is the default fixture source
 
-`core.autocrlf` is effectively true on Windows and this repo ships no `.gitattributes`, so **the
-byte length of a committed text file is not a checkout-invariant property.** A generated fixture is
+`core.autocrlf` is effectively true on Windows, so **the byte length of a committed text file is
+not inherently a checkout-invariant property.** `.gitattributes` now pins `* text=auto eol=lf` and
+names the fixture trees, which makes it one in practice — but it remains a repository setting
+rather than a guarantee about the bytes, so the reasoning below still stands. A generated fixture is
 materialised at load time from a `{unit, repeat}` pair with an explicit LF join, so git never sees
 the bytes and git cannot rewrite them. The four fixtures whose structure cannot be expressed as a
 repeated unit — a planted fact among decoys, bundled noise, a planted secret — are committed, and
