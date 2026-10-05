@@ -47,11 +47,17 @@ try {
 // the try for the same reason exit 0 is: a throw must not skip it.
 writeExitDiagnostic(process.env.CLAUDE_ROUTER_EXIT_DIAGNOSTIC, { wroteResponse })
 
-// exitCode, NOT process.exit(0). Measured on Windows / Node 24: calling process.exit() while
-// undici is still tearing down the TLS socket of a just-finished fetch aborts the process natively
-// ("Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file src\win\async.c") with exit
-// 3221226505 and that text on stderr — 5 of 5 runs in a minimal repro, and 3 of 3 live hook runs
-// against Gemini. Letting the loop drain instead exited 0 in 5 of 5, and drained in 1–11 ms.
+// exitCode, NOT process.exit(0). Measured on Windows / Node 24: calling process.exit() shortly
+// after a real hosted fetch aborts the process natively ("Assertion failed: !(handle->flags &
+// UV_HANDLE_CLOSING), file async.c, line 94") with exit 3221226505 and that text on stderr - 5 of
+// 5 runs in a minimal repro, and 3 of 3 live hook runs against Gemini. Letting the loop drain
+// instead exited 0 in 5 of 5, and drained in 1-11 ms.
+//
+// It is NOT the socket, and the repro says so: closing undici's global dispatcher before exiting
+// still crashed 5 of 5. That assertion guards uv_async_send, the cross-thread wakeup, which an
+// on-loop socket teardown cannot reach - it needs no wakeup, because the thread it would wake is
+// the thread doing the closing. The mechanism is still open; docs/failure-modes.md has the
+// remaining suspects and CLAUDE_ROUTER_EXIT_DIAGNOSTIC is the instrument for them.
 process.exitCode = 0
 // The backstop: if some handle ever keeps the loop alive, do not hold the developer's Read
 // hostage to it. unref'd, so it never delays a clean drain by itself.
