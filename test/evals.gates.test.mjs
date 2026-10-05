@@ -384,6 +384,89 @@ test('no_invented_entities cannot catch recombination, and the suite says so', (
   assert.equal(g.status, 'pass', 'a false claim built from real tokens passes — a known limitation')
 })
 
+/* -------------------------------------------------- hook_process_exited_clean */
+
+/** A hook-layer bundle: the harness declares the layer on the case, not on the artifacts. */
+function hookBundle(artifacts = {}) {
+  return bundle({
+    caseDef: { harness: 'hook' },
+    artifacts: { hookExitCode: 0, hookStderr: '', hookSignal: null, ...artifacts },
+  })
+}
+
+test('hook_process_exited_clean passes on a clean child', () => {
+  const g = gateFor('hook_process_exited_clean', hookBundle())
+  assert.equal(g.status, 'pass')
+  assert.match(g.detail, /exited 0 and wrote no stderr/)
+  assert.match(g.detail, new RegExp(process.platform), 'the platform must travel with the result')
+})
+
+test('hook_process_exited_clean fails on the observed Windows abort, in both spellings', () => {
+  // The exact sighting from docs/failure-modes.md. The decimal is what a CI log prints; the hex is
+  // the only spelling anyone can search for, so the detail has to carry both.
+  const g = gateFor(
+    'hook_process_exited_clean',
+    hookBundle({
+      hookExitCode: 3221226505,
+      hookStderr: 'Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file src\\win\\async.c, line 94\n',
+    }),
+  )
+  assert.equal(g.status, 'fail')
+  assert.match(g.detail, /3221226505/, 'the decimal a CI log prints')
+  assert.match(g.detail, /0xC0000409/i, 'the hex spelling that is searchable')
+  assert.match(g.detail, /stderr/, 'both halves of the violated contract are named')
+  assert.match(g.evidence, /UV_HANDLE_CLOSING/, 'the assertion itself is the attachable evidence')
+})
+
+test('hook_process_exited_clean fails on stderr alone, with exit 0', () => {
+  // The silent half, and the one most likely to appear by itself: a PreToolUse exit code other
+  // than 0 or 2 is non-blocking, so stray stderr is the only signal a reader would ever notice.
+  const g = gateFor('hook_process_exited_clean', hookBundle({ hookStderr: 'warning: something\n' }))
+  assert.equal(g.status, 'fail')
+  assert.match(g.detail, /wrote 19 byte\(s\) to stderr/)
+  assert.equal(/exited/.test(g.detail.replace(/always exit 0/, '')), false, 'a clean exit is not reported as a fault')
+})
+
+test('hook_process_exited_clean names the signal when POSIX reports no exit code', () => {
+  // The same native abort on Linux and macOS: code null, signal SIGABRT. Printing `exited null`
+  // would throw away the only fact the kill carried.
+  const g = gateFor(
+    'hook_process_exited_clean',
+    hookBundle({ hookExitCode: null, hookSignal: 'SIGABRT', hookStderr: 'Assertion failed\n' }),
+  )
+  assert.equal(g.status, 'fail')
+  assert.match(g.detail, /killed by signal SIGABRT/)
+  assert.equal(/exited null/.test(g.detail), false)
+})
+
+test('hook_process_exited_clean fails when the harness recorded nothing', () => {
+  // The failure mode this gate exists to end: the signals were captured and discarded for a whole
+  // phase. A harness that stops recording them must go red, not quiet.
+  const entry = hookBundle()
+  delete entry.artifacts.hookExitCode
+  const g = gateFor('hook_process_exited_clean', entry)
+  assert.equal(g.status, 'fail')
+  assert.match(g.detail, /recorded no exit code or stderr/)
+})
+
+test('hook_process_exited_clean is not_applicable off the hook layer', () => {
+  for (const harness of [undefined, 'decide', 'dispatch']) {
+    const g = gateFor('hook_process_exited_clean', bundle({ caseDef: { harness } }))
+    assert.equal(g.status, 'not_applicable', `harness ${String(harness)} must not be judged`)
+  }
+})
+
+test('hook_process_exited_clean redacts its evidence', () => {
+  // A gate reporting a leak must not become the leak: stderr is attacker-adjacent text that the
+  // child chose, so it crosses the shipped redactor like every other evidence string.
+  const g = gateFor(
+    'hook_process_exited_clean',
+    hookBundle({ hookExitCode: 1, hookStderr: 'failed with GEMINI_API_KEY=AIzaSyFAKE0000000000000000000000000000000\n' }),
+  )
+  assert.equal(g.status, 'fail')
+  assert.equal(g.evidence.includes('AIzaSyFAKE0000000000000000000000000000000'), false, 'the key must not survive')
+})
+
 /* ------------------------------------------------------------------ plumbing */
 
 test('a gate that throws becomes a named failure, not a silent skip', () => {

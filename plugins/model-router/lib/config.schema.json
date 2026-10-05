@@ -207,7 +207,7 @@
               "type": "string",
               "minLength": 1,
               "default": "gemini-3.8-flash",
-              "description": "Model used when a lane names the gemini provider without inheriting worker.model. gemini-3.8-flash is Google own named successor to the retired gemini-2.5-flash, and the middle tier of the three the bundled pricing table knows. Env override: CMR_GEMINI_MODEL."
+              "description": "Model used when a lane names the gemini provider without inheriting worker.model. gemini-3.8-flash: measured to keep more verified answers than gemini-3.1-flash-lite, which is about a third of the price but had about half its answers discarded by the verifier on the same file. Env override: CMR_GEMINI_MODEL."
             }
           }
         },

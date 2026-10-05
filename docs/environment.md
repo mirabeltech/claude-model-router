@@ -145,8 +145,11 @@ Deliberately without a `SPEC` entry. A switch that can only be reached by editin
 | Variable | Required | Secret | Default | Subsystem | Purpose |
 | --- | --- | --- | --- | --- | --- |
 | `CLAUDE_ROUTER_TELEMETRY` | no | no | — | telemetry | Kill switch for the telemetry write path. Set it to 0/false/off to stop rows being written without touching configuration. |
+| `CLAUDE_ROUTER_EXIT_DIAGNOSTIC` | no | no | — | hook | Absolute path to a file the hook appends one JSON line to immediately before it exits, recording what was still live: process.getActiveResourcesInfo() and a projection of the libuv handle list. Unset, it does nothing at all. |
 
 **`CLAUDE_ROUTER_TELEMETRY`** — Deliberately has no SPEC entry: it is an emergency stop, and a setting that can only be reached by editing a file is not an emergency stop. A test pins that exactly one module reads it.
+
+**`CLAUDE_ROUTER_EXIT_DIAGNOSTIC`** — Written for the non-reproducible libuv abort in docs/failure-modes.md, and deliberately has no SPEC entry for the same reason CLAUDE_ROUTER_TELEMETRY has none: a diagnostic you can only enable by editing a config file is not one you reach for after a crash. It is NOT the telemetry store — a line with no schema_version would be counted as rowsIncompatible and dropped from every total, and retention would eventually delete the evidence. The libuv report is never serialized whole, because it carries environmentVariables.
 
 ### Conventions we honour
 

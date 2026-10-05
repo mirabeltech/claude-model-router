@@ -59,6 +59,9 @@ export function runDecideCase({ caseDef, absPaths, projectDir, config }) {
     output: null,
     corpusChars: null,
     hookStdout: null,
+    hookExitCode: null,
+    hookStderr: null,
+    hookSignal: null,
     hookOutcome: null,
     timings: { routing_decision: routingDecisionMs },
     ...compareDecision(caseDef, decision),
@@ -139,6 +142,7 @@ export async function runHookCase({ caseDef, absPaths, projectDir, config, arm =
     hookStdout: child.stdout,
     hookExitCode: child.code,
     hookStderr: child.stderr,
+    hookSignal: child.signal,
     hookOutcome,
     timings: { total_delegated_path: totalMs, hook_startup: totalMs },
     ...compareDecision(caseDef, decision),
@@ -237,6 +241,9 @@ export async function runDispatchCase({
     promptChars: built.prompt.length,
     taskIntentSource: taskIntent === null ? 'none' : 'other',
     hookStdout: null,
+    hookExitCode: null,
+    hookStderr: null,
+    hookSignal: null,
     hookOutcome: null,
     timings: {
       routing_decision: routingDecisionMs,
@@ -321,4 +328,43 @@ export function latencySeries(ran) {
   const out = {}
   for (const [name, samples] of bucket) out[name] = summarizeSamples(samples)
   return out
+}
+
+/**
+ * Did every real hook child exit the way the contract promises?
+ *
+ * REPORTED AS WELL AS GATED, because a gate only speaks when it fails. Without the clean-exit
+ * count, "no gate failed" is indistinguishable from "no hook case ran" — which is what `--case`
+ * filtering to a decide case produces — and the crash this exists for showed up twice in eight
+ * runs. A green run has to be positive evidence, not silence, or an intermittent fault has no
+ * history to be intermittent against.
+ *
+ * The denominator travels with the numbers for the same reason `not_applicable` is a real gate
+ * status: a count without its population is not information.
+ */
+export function hookProcessHealth(ran) {
+  let hookCases = 0
+  let exitedZero = 0
+  let emptyStderr = 0
+  const incidents = []
+
+  for (const r of ran) {
+    if (r.layer !== 'hook') continue
+    hookCases += 1
+
+    const clean = r.hookExitCode === 0
+    const quiet = r.hookStderr === ''
+    if (clean) exitedZero += 1
+    if (quiet) emptyStderr += 1
+    if (clean && quiet) continue
+
+    incidents.push({
+      id: r.caseDef.id,
+      code: r.hookExitCode,
+      signal: r.hookSignal,
+      stderrBytes: typeof r.hookStderr === 'string' ? Buffer.byteLength(r.hookStderr, 'utf8') : null,
+    })
+  }
+
+  return { hookCases, exitedZero, emptyStderr, incidents }
 }

@@ -15,6 +15,7 @@
 import fs from 'node:fs'
 
 import { loadConfig } from '../lib/config.mjs'
+import { writeExitDiagnostic } from '../lib/hook/exit-diagnostic.mjs'
 import { runReadHook } from '../lib/hook/run.mjs'
 
 async function readStdin() {
@@ -22,6 +23,8 @@ async function readStdin() {
   for await (const chunk of process.stdin) chunks.push(chunk)
   return Buffer.concat(chunks).toString('utf8')
 }
+
+let wroteResponse = false
 
 try {
   const raw = await readStdin()
@@ -33,10 +36,23 @@ try {
     // write racing process exit is how a response arrives truncated. The telemetry sink uses the
     // same discipline for the same reason.
     fs.writeSync(1, JSON.stringify(response))
+    wroteResponse = true
   }
 } catch {
   // Nothing is reported, because there is nobody safe to report it to. The absence of output is
   // itself the correct answer: run the Read.
 }
 
-process.exit(0)
+// Total by construction and off unless an operator names a file — see the module header. Outside
+// the try for the same reason exit 0 is: a throw must not skip it.
+writeExitDiagnostic(process.env.CLAUDE_ROUTER_EXIT_DIAGNOSTIC, { wroteResponse })
+
+// exitCode, NOT process.exit(0). Measured on Windows / Node 24: calling process.exit() while
+// undici is still tearing down the TLS socket of a just-finished fetch aborts the process natively
+// ("Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file src\win\async.c") with exit
+// 3221226505 and that text on stderr — 5 of 5 runs in a minimal repro, and 3 of 3 live hook runs
+// against Gemini. Letting the loop drain instead exited 0 in 5 of 5, and drained in 1–11 ms.
+process.exitCode = 0
+// The backstop: if some handle ever keeps the loop alive, do not hold the developer's Read
+// hostage to it. unref'd, so it never delays a clean drain by itself.
+setTimeout(() => process.exit(0), 2000).unref()

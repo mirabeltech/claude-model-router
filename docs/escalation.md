@@ -65,7 +65,8 @@ All three columns measured on this machine, 2026-10-04, same 13 KB file where po
 | | latency | cost per 12 KB read | privacy |
 |---|---|---|---|
 | Ollama `mistral:latest` (CPU) | **80–113 s**, and it did not finish 13 KB inside the 120 s maximum | free | nothing leaves the machine |
-| Gemini `gemini-3.8-flash` | **6.7 s** end to end for the same 13 KB file | fractions of a cent | the file goes to Google |
+| Gemini `gemini-3.8-flash` (the default) | **6.7 s** end to end for the same 13 KB file | fractions of a cent | the file goes to Google |
+| Gemini `gemini-3.1-flash-lite` (2026-10-05) | **3.9–7.4 s** for the same file; about half its answers were discarded by the verifier (n=13) | about a third of the above | the file goes to Google |
 | Claude (fall open) | immediate | ~3k context tokens | — |
 
 That is roughly **15x** on the same input, and the local model could not complete it at all inside

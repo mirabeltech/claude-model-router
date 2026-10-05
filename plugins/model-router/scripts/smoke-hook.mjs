@@ -148,6 +148,24 @@ const env = {
 }
 if (model) env.CMR_BULK_READ_WORKER_MODEL = model
 
+/**
+ * Where the child records what was still live when it exited.
+ *
+ * SET ON EVERY RUN, passing or not. The native abort this was built for is fixed, but its exact
+ * libuv mechanism is not proven, and a single capture cannot tell "a DNS request was in flight"
+ * from "a DNS request is always in flight on this path". Only a diff between a bad run and clean
+ * runs on both providers can, so the clean runs have to be captured too.
+ *
+ * `--diagnostic <path>` keeps the lines somewhere that outlives the scratch directory, which is
+ * what an operator chasing a second sighting wants: one file, appended to across many runs, so a
+ * crash arrives with its own baseline attached.
+ */
+const diagnostic =
+  opt('diagnostic', null) ?? process.env.CLAUDE_ROUTER_EXIT_DIAGNOSTIC ?? path.join(scratch, 'exit-diagnostic.jsonl')
+env.CLAUDE_ROUTER_EXIT_DIAGNOSTIC = diagnostic
+console.log(`  exit log: ${diagnostic}`)
+console.log('')
+
 const minBytes = opt('min-bytes', null)
 if (minBytes !== null) {
   env.CMR_MIN_BYTES = minBytes
@@ -201,6 +219,27 @@ child.on('close', (code) => {
   console.log(`  exit:     ${code}`)
   console.log(`  elapsed:  ${elapsed} ms`)
   if (stderr !== '') console.log(`  stderr:   ${JSON.stringify(stderr)}  <-- the hook must never write here`)
+
+  // THE WHOLE POINT OF THIS SCRIPT FOR THE libuv ABORT. A violation of "always exit 0, never write
+  // stderr" is dumped with whatever was still live at exit, before cleanup can remove it, so the
+  // next sighting documents itself without the operator having predicted it.
+  if (code !== 0 || stderr !== '') {
+    console.log('')
+    console.log('  THE HOOK BROKE ITS OWN CONTRACT. What was live at exit:')
+    try {
+      const lines = fs.readFileSync(diagnostic, 'utf8').split('\n').filter((l) => l.trim() !== '')
+      if (lines.length === 0) {
+        // Itself a finding, and a strong one: it refutes "during exit" and relocates the question.
+        console.log('    (no diagnostic line — the process died BEFORE the diagnostic ran)')
+      }
+      for (const l of lines.slice(-3)) console.log(`    ${l}`)
+    } catch {
+      console.log(`    (could not read ${diagnostic})`)
+    }
+    console.log('')
+    console.log('    Attach this to docs/failure-modes.md, with a clean run on the SAME provider')
+    console.log('    and a clean run on the other one. The line is only readable as a diff.')
+  }
 
   const rows = readRows(scratch)
 

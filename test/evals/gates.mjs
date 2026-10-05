@@ -479,6 +479,79 @@ function noWriteCapabilityOnTheDelegationPath({ run }) {
     : result('no_write_capability_on_the_delegation_path', 'fail', { detail: offenders.join('; ') })
 }
 
+/* ------------------------------------------------------- the hook's own contract */
+
+/**
+ * How a dead child announced itself, in the spelling someone can actually search for.
+ *
+ * The decimal is useless for that — `3221226505` matches nothing — while `0xC0000409` is the
+ * NTSTATUS spelling every account of this failure uses, including `docs/failure-modes.md`. Both go
+ * in the detail, because the decimal is what a CI log prints and the hex is what a search needs.
+ * POSIX reports the same native abort as `code: null` with `SIGABRT`, so the signal is named rather
+ * than printed as `null`.
+ */
+function describeHookExit(code, signal) {
+  if (typeof code === 'number') {
+    return `exited ${code} (0x${(code >>> 0).toString(16).toUpperCase().padStart(8, '0')})`
+  }
+  if (typeof signal === 'string' && signal !== '') return `killed by signal ${signal}`
+  return `exited ${String(code)}`
+}
+
+/**
+ * The real hook child exited 0 and wrote nothing to stderr.
+ *
+ * ONE GATE, NOT TWO, because this is one contract: `docs/claude-code-hook-contract.md` §4 is why
+ * the plugin never uses `exit 2` and never writes a diagnostic, and the native abort recorded in
+ * `docs/failure-modes.md` violated both halves in the same breath. Two gates would file one event
+ * twice with identical evidence.
+ *
+ * THE SIGNALS WERE ALREADY BEING COLLECTED AND THROWN AWAY. `harness.mjs` has recorded
+ * `hookExitCode` and `hookStderr` since the hook layer existed, and nothing read either one — so a
+ * crash on a CI leg that spawns the real hook four times per run left no trace at all.
+ *
+ * AN ABSENT FIELD FAILS RATHER THAN PASSES. `not_applicable` is keyed off the case's declared
+ * harness, never off `undefined`, so a harness that stops recording the exit code goes red instead
+ * of going quiet. That is the whole failure mode this gate was written to end.
+ *
+ * HONEST LIMIT: every hook case in this corpus refuses before dispatch, so the child opens no
+ * socket and resolves no name, and this gate is unlikely to reproduce the hosted-provider abort
+ * itself. What it does is run a clean-exit sampler on every leg forever. The instrument aimed at
+ * that crash is `CLAUDE_ROUTER_EXIT_DIAGNOSTIC` under `npm run smoke:hook`.
+ */
+function hookProcessExitedClean({ caseDef, artifacts }) {
+  const GATE = 'hook_process_exited_clean'
+  const caseId = caseDef?.id ?? null
+  if (caseDef?.harness !== 'hook') return result(GATE, 'not_applicable', { caseId })
+
+  const { hookExitCode: code, hookStderr: stderr, hookSignal: signal } = artifacts
+  // Where it happened. The abort is platform- and runtime-specific, and a log pasted into an issue
+  // without these three is not evidence.
+  const host = `${process.platform}/${process.arch} ${process.version}`
+
+  if (code === undefined || stderr === undefined) {
+    return result(GATE, 'fail', {
+      caseId,
+      detail: `the harness recorded no exit code or stderr for a hook case (${host})`,
+    })
+  }
+
+  const faults = []
+  if (code !== 0) faults.push(describeHookExit(code, signal))
+  if (typeof stderr === 'string' && stderr !== '') {
+    faults.push(`wrote ${Buffer.byteLength(stderr, 'utf8')} byte(s) to stderr`)
+  }
+
+  if (faults.length === 0) {
+    return result(GATE, 'pass', { caseId, detail: `exited 0 and wrote no stderr (${host})` })
+  }
+  return result(GATE, 'fail', {
+    caseId,
+    detail: `the hook must always exit 0 and never write to stderr; it ${faults.join(' and ')} on ${host}`,
+    evidence: stderr,
+  })
+}
+
 /* ---------------------------------------------------------------- the registry */
 
 /** Per-case gates. */
@@ -487,6 +560,7 @@ export const CASE_GATES = Object.freeze({
   no_secret_leakage_outbound: Object.freeze({ advisory: false, run: noSecretLeakageOutbound }),
   no_routing_of_protected_categories: Object.freeze({ advisory: false, run: noRoutingOfProtectedCategories }),
   no_fabricated_file_content: Object.freeze({ advisory: false, run: noFabricatedFileContent }),
+  hook_process_exited_clean: Object.freeze({ advisory: false, run: hookProcessExitedClean }),
   no_invented_entities: Object.freeze({ advisory: true, run: noInventedEntities }),
   no_claimed_side_effects: Object.freeze({ advisory: true, run: noClaimedSideEffects }),
 })

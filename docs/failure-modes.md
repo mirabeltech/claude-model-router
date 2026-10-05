@@ -32,10 +32,28 @@ something wrong would be worse than writing nothing — which is where SAFE REFU
 | anything else throws | outer catch, `hook_threw` | FAIL OPEN | `hook.failopen` |
 | a filesystem that throws on everything | zero bytes, exit 0 | FAIL OPEN | `hook.failopen` |
 | the bare `catch {}` in the entry point | **not reachable from the process boundary** | FAIL OPEN (declared) | `hook.security` |
+| the process is **aborted** during exit (`0xC0000409`) | **FIXED** — was: stdout already flushed, exit code neither 0 nor 2, a native assertion on stderr | **UNCLASSIFIED — outside this model** | `hook.security`, `evals` gate |
 
-**Exit code 0, always.** `process.exit(2)` is statically forbidden, because exit 2 turns stderr
-into Claude's feedback and blocks the tool call — the opposite of what a broken router should do. An
-empty stdout with exit 0 is indistinguishable from the hook not being installed.
+**Exit code 0, always — whenever our code reaches the exit.** `process.exit(2)` is statically
+forbidden, because exit 2 turns stderr into Claude's feedback and blocks the tool call — the
+opposite of what a broken router should do. An empty stdout with exit 0 is indistinguishable from
+the hook not being installed. The one case where our code did **not** reach the exit is the abort
+row above; it was reproduced and fixed, and the last section of this document holds the evidence.
+
+**Why the abort row is UNCLASSIFIED rather than FAIL OPEN.** All three classes at the top of this
+document presuppose that our code runs: FAIL OPEN is an outcome this plugin *chooses*, and an abort
+is the loss of the chooser. The session does proceed — a `PreToolUse` exit code other than 0 or 2 is
+non-blocking — but that is a property of the hook protocol, not a guarantee this plugin provides.
+Filing it as FAIL OPEN would dress a coincidence up as a promise, and the distinction is what makes
+the row worth keeping now that it is fixed: the fix restores the guarantee, it does not bring an
+abort inside the model.
+
+It is also the one row whose test is **static rather than behavioural**. A native abort is
+reproducible — the last section has the 15-line script that produces it 5 times out of 5 — but not
+from inside a `node --test` process, which the abort would take down with it. So
+`test/hook.security.test.mjs` pins the *shape* of the fix instead: no direct `process.exit()` call,
+and the backstop timer must be `unref`'d. That is a weaker claim than the rows above it, and it is
+the reason the eval gate exists to watch the real child.
 
 **The bare catch is unreachable, and is not faked.** Every call inside the `try` is specified never
 to throw: `runReadHook` has its own catch returning `hook_threw`, and `loadConfig` swallows per
@@ -280,30 +298,47 @@ completely different things to an operator.
 
 ---
 
-## Observed but not reproduced: a native crash on the hosted provider path
+## Fixed: a native crash at exit on the hosted provider path
 
-Recorded rather than dropped, because the hook's contract is absolute — **always exit 0, never
-write to stderr** — and this violates both.
+Recorded with its evidence, because the hook's contract is absolute — **always exit 0, never write
+to stderr** — and this violated both.
 
-Twice during live Gemini testing on Windows (2026-10-04), `hooks/pre-tool-use.mjs` exited
-`3221226505` (`0xC0000409`) with this on stderr:
+On Windows, after a real Gemini call, `hooks/pre-tool-use.mjs` sometimes exited `3221226505`
+(`0xC0000409`) with this on stderr:
 
 ```
 Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file src\win\async.c, line 94
 ```
 
-That is libuv, during process teardown — something signalling an async handle that is already
-closing. It did **not** reproduce across six subsequent runs on the same path, and has never been
-seen on the Ollama path, so it is timing-dependent and most likely a race between `process.exit(0)`
-and an in-flight TLS socket teardown that the local HTTP path does not have.
+**History.** Seen twice on 2026-10-04 with `gemini-3.8-flash`, then not across six reruns, so it
+was first recorded here as timing-dependent and deliberately left unfixed. On 2026-10-05, with
+`gemini-3.1-flash-lite`, it reproduced on **3 of 3** live hook runs, which made it testable.
 
-**What it costs, and why it is not a release blocker.** The response had already been written when
-it happened, and an exit code other than `0` or `2` is non-blocking for a `PreToolUse` hook — so
-the session proceeds either way. What is lost is the guarantee itself: the smoke script's own
-pass condition requires `exit 0` and empty stderr, and it correctly reported those runs as not
-usable.
+**The repro that settled it.** A 15-line script — one `fetch` to the Gemini API, then end the
+process three different ways, five runs each, Windows 11, Node 24.16.0:
 
-**Not fixed, because it is not understood.** The obvious candidate — disabling HTTP keep-alive so
-no socket outlives the request — is a plausible guess, and shipping a guess as a fix for a race
-nobody can reproduce would make the next occurrence harder to diagnose, not easier. It is written
-down here so that a second sighting has somewhere to attach.
+| How the process ended | Exit codes |
+|---|---|
+| `process.exit(0)` right after the fetch | `-1073740791` × 5 (the crash) |
+| close undici's global dispatcher, then `process.exit(0)` | `-1073740791` × 5 |
+| `process.exitCode = 0` and let the event loop drain | `0` × 5 |
+
+The drain took **1–11 ms** after the response was read, so the fear recorded here earlier — that
+letting the loop drain risks a hung hook — did not materialise in measurement.
+
+**The fix.** The hook sets `process.exitCode = 0` instead of calling `process.exit(0)`, plus a
+**backstop**: `setTimeout(() => process.exit(0), 2000).unref()`. `unref` means the timer never keeps
+the process alive on its own, so it cannot delay a clean drain; it only fires if some other handle
+does, and then a hung session is traded for the old, non-blocking crash, which is the better of
+the two failures.
+
+**After the fix:** 10 of 10 live hook runs against `gemini-3.1-flash-lite` exited `0` with empty
+stderr. `test/hook.security.test.mjs` pins the shape statically — no direct `process.exit()` call,
+and the backstop must be `unref`'d.
+
+**What is still not proven.** The exact libuv mechanism. The narrowed hypothesis — threadpool work
+(`uv_getaddrinfo` or async `zlib`, both present on the Gemini path and absent on loopback Ollama)
+signalling `wq_async` after `process.exit()` began closing the loop's async handles — fits the
+evidence, and the fix works whether or not it is the exact cause. `CLAUDE_ROUTER_EXIT_DIAGNOSTIC`
+stays in place, and the eval gate `hook_process_exited_clean` still asserts exit 0 and empty stderr
+on every real hook child, so a regression documents itself.

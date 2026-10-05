@@ -68,6 +68,7 @@ export const BUNDLED_PRICING = Object.freeze({
   currency: 'USD',
   models: Object.freeze({
     'gemini:gemini-3.8-flash': row('gemini', 'gemini-3.8-flash', 'https://ai.google.dev/pricing'),
+    'gemini:gemini-3.1-flash-lite': row('gemini', 'gemini-3.1-flash-lite', 'https://ai.google.dev/pricing'),
     'gemini:gemini-3.5-flash-lite': row('gemini', 'gemini-3.5-flash-lite', 'https://ai.google.dev/pricing'),
     'gemini:gemini-3.1-pro-preview': row('gemini', 'gemini-3.1-pro-preview', 'https://ai.google.dev/pricing'),
 

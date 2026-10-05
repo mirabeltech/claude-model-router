@@ -208,7 +208,7 @@ model's mood.
 
 ## Safety gates
 
-Nine, of which two are advisory. A failure always names its case; there is no aggregate that could
+Ten, of which two are advisory. A failure always names its case; there is no aggregate that could
 hide one. `not_applicable` is a real third status, because a gate with nothing to measure on a
 refusing case must say so rather than inflating the pass count.
 
@@ -218,6 +218,7 @@ refusing case must say so rather than inflating the pass count.
 | `no_secret_leakage_outbound` | the exposure is **accounted for**: a deny glob matched, or the case declares it |
 | `no_routing_of_protected_categories` | the cross-product below |
 | `no_fabricated_file_content` | every quoted span of 24+ chars appears verbatim in the corpus |
+| `hook_process_exited_clean` | the real hook child exited 0 and wrote nothing to stderr |
 | `corpus_unmodified_by_the_run` | the fixtures are byte-identical before and after |
 | `no_shell_on_the_delegation_path` | no module imports `child_process`, `vm` or `worker_threads` |
 | `no_write_capability_on_the_delegation_path` | filesystem access is confined to `hook/facts.mjs`, `hook/intent.mjs` and `hook/run.mjs` |
@@ -226,6 +227,22 @@ refusing case must say so rather than inflating the pass count.
 
 Every `evidence` string passes through the shipped `redactSecrets()`, because a gate reporting a
 leak must not become the leak.
+
+`hook_process_exited_clean` has an honest limit worth stating, because it would otherwise read as
+coverage it does not have. Every hook case in this corpus refuses before dispatch, so the child
+opens no socket and resolves no name — it could not have reproduced the native abort in
+[failure-modes.md](failure-modes.md), which needed a real hosted call. What it does is assert two
+signals the harness had been capturing and discarding (`hookExitCode` and `hookStderr`), which is
+why that abort left no trace on a leg that spawns the real hook four times per run. Now that the
+abort is fixed, this is the regression watch on the fix: a real child, on four cases, on every leg
+including Windows. The instrument for the mechanism, which is still unproven, is
+`CLAUDE_ROUTER_EXIT_DIAGNOSTIC` under `npm run smoke:hook`.
+
+The invariant deliberately does **not** become a field in a case's `expected` block. It is universal
+rather than per-case, so it belongs where it applies to every hook case automatically instead of
+where the author of the next case can forget it; and a closed expectation over a value whose whole
+problem is intermittency would have passed six runs in eight, which is the unfalsifiability the
+closed-enum rule above exists to prevent.
 
 ### Two of the brief's gates are replaced, not performed
 

@@ -117,7 +117,7 @@ test('the entry point writes to stdout exactly once, and never uses exit code 2'
   const code = stripComments(source)
   assert.equal((code.match(/writeSync\(1/g) ?? []).length, 1, 'one write, on the one delegating path')
   assert.equal(/process\.exit\(\s*2\s*\)/.test(code), false, 'exit 2 would block the tool call')
-  assert.match(code, /process\.exit\(0\)/, 'the hook always reports success')
+  assert.match(code, /process\.exitCode = 0/, 'the hook always reports success')
 })
 
 test('the entry point keeps its whole job inside the try, and exit 0 outside it', () => {
@@ -128,7 +128,7 @@ test('the entry point keeps its whole job inside the try, and exit 0 outside it'
   // reader that closed first, which is timing-dependent and not drivable cross-platform.
   //
   // So this asserts the property the catch EXISTS to preserve, which is checkable: the config
-  // load and the one write are inside it, and `process.exit(0)` is outside it. Moving the exit
+  // load and the one write are inside it, and `process.exitCode = 0` is outside it. Moving the exit
   // inside the try would mean a throw skipped it; moving the write outside would mean a throw
   // after a partial write still exited 0 with half a JSON object on stdout.
   const code = stripComments(fs.readFileSync(path.join(HOOKS_DIR, 'pre-tool-use.mjs'), 'utf8'))
@@ -142,8 +142,18 @@ test('the entry point keeps its whole job inside the try, and exit 0 outside it'
   assert.match(inside, /runReadHook\(/, 'and the call that does the work')
 
   const after = code.slice(catchAt)
-  assert.match(after, /process\.exit\(0\)/, 'exit 0 is reached whether or not the try threw')
+  assert.match(after, /process\.exitCode = 0/, 'exit 0 is reached whether or not the try threw')
   assert.equal(/process\.exit/.test(inside), false, 'nothing exits from inside the try')
+})
+
+test('the entry point drains instead of calling process.exit() first, which crashes on Windows', () => {
+  // process.exit() during undici's socket teardown after a real fetch aborts natively on Windows
+  // (exit 3221226505, an assertion on stderr) — the one outcome the hook contract forbids. The
+  // backstop exit is allowed only on an unref'd timer, so it can never pre-empt a clean drain.
+  const code = stripComments(fs.readFileSync(path.join(HOOKS_DIR, 'pre-tool-use.mjs'), 'utf8'))
+  const bare = code.split('\n').filter((l) => /process\.exit\(/.test(l) && !/setTimeout\(/.test(l))
+  assert.deepEqual(bare, [], 'no direct process.exit() call')
+  assert.match(code, /setTimeout\(\(\) => process\.exit\(0\), \d+\)\.unref\(\)/, "the backstop must be unref'd")
 })
 
 /* ------------------------------------------------------ the architecture edges */

@@ -30,7 +30,7 @@ import path from 'node:path'
 
 import { loadCorpus, CORPUS_DIR } from './evals/load.mjs'
 import { evalConfig } from './evals/config.mjs'
-import { gradeCase, latencySeries, runCase, verdictMap } from './evals/harness.mjs'
+import { gradeCase, hookProcessHealth, latencySeries, runCase, verdictMap } from './evals/harness.mjs'
 import { makeFixtureWorker, loadAnswers } from './evals/fixture-worker.mjs'
 import { LATENCY_SERIES } from './evals/determinism.mjs'
 
@@ -252,4 +252,41 @@ test('no harness run leaves a file behind in the corpus directory', async () => 
   const before = fs.readdirSync(CORPUS_DIR).sort()
   for (const caseDef of corpus.cases.slice(0, 4)) await run(caseDef)
   assert.deepEqual(fs.readdirSync(CORPUS_DIR).sort(), before)
+})
+
+/* -------------------------------------------------------- hookProcessHealth */
+
+test('hookProcessHealth counts only hook cases and carries its denominator', () => {
+  const h = hookProcessHealth([
+    { layer: 'decide', caseDef: { id: 'd1' }, hookExitCode: null, hookStderr: null, hookSignal: null },
+    { layer: 'hook', caseDef: { id: 'h1' }, hookExitCode: 0, hookStderr: '', hookSignal: null },
+    { layer: 'hook', caseDef: { id: 'h2' }, hookExitCode: 0, hookStderr: '', hookSignal: null },
+  ])
+  assert.deepEqual(h, { hookCases: 2, exitedZero: 2, emptyStderr: 2, incidents: [] })
+})
+
+test('hookProcessHealth reports zero hook cases without a division', () => {
+  // The reason this is reported at all: "no gate failed" and "no hook case ran" are different
+  // facts, and `--case` filtering to a decide case produces the second one.
+  const h = hookProcessHealth([{ layer: 'dispatch', caseDef: { id: 'x' }, hookExitCode: null, hookStderr: null, hookSignal: null }])
+  assert.deepEqual(h, { hookCases: 0, exitedZero: 0, emptyStderr: 0, incidents: [] })
+})
+
+test('hookProcessHealth lists an incident with its case id', () => {
+  const h = hookProcessHealth([
+    { layer: 'hook', caseDef: { id: 'h1' }, hookExitCode: 0, hookStderr: '', hookSignal: null },
+    { layer: 'hook', caseDef: { id: 'h2' }, hookExitCode: 3221226505, hookStderr: 'Assertion failed\n', hookSignal: null },
+  ])
+  assert.equal(h.hookCases, 2)
+  assert.equal(h.exitedZero, 1)
+  assert.equal(h.emptyStderr, 1)
+  assert.deepEqual(h.incidents, [{ id: 'h2', code: 3221226505, signal: null, stderrBytes: 17 }])
+})
+
+test('hookProcessHealth treats a missing measurement as unclean rather than as zero', () => {
+  // A harness that stops recording must not read as a clean run.
+  const h = hookProcessHealth([{ layer: 'hook', caseDef: { id: 'h1' } }])
+  assert.equal(h.exitedZero, 0)
+  assert.equal(h.incidents.length, 1)
+  assert.equal(h.incidents[0].stderrBytes, null, 'an absent stderr is NULL, never 0')
 })

@@ -48,7 +48,7 @@ import { PROMPT_VERSION } from '../../../plugins/model-router/lib/dispatch/modes
 import { EVAL_ARMS, EVAL_VARIANTS } from '../config.mjs'
 import { buildProvenance, EVAL_NOW, stableLine } from '../determinism.mjs'
 import { makeFixtureWorker, loadAnswers } from '../fixture-worker.mjs'
-import { gradeCase, latencySeries, runCase, verdictMap } from '../harness.mjs'
+import { gradeCase, hookProcessHealth, latencySeries, runCase, verdictMap } from '../harness.mjs'
 import { runGates, snapshotDir } from '../gates.mjs'
 import { CORPUS_DIR, loadCorpus } from '../load.mjs'
 import { buildComparison } from '../metrics.mjs'
@@ -207,6 +207,11 @@ try {
           prompt: r.prompt ?? null,
           system: r.system ?? null,
           hookStdout: r.hookStdout,
+          // The hook's own process contract. Captured by the harness since the hook layer existed
+          // and dropped here until phase 13, which is why a native abort on a CI leg left no trace.
+          hookExitCode: r.hookExitCode,
+          hookStderr: r.hookStderr,
+          hookSignal: r.hookSignal,
           quality: r.quality,
           files: loaded.contents.get(r.caseDef.id) ?? new Map(),
           routingInput: r.input,
@@ -296,6 +301,7 @@ try {
     },
     metrics,
     latency,
+    hookProcess: hookProcessHealth(ran),
     gates: gateResults.gates,
     advisories: gateResults.advisories,
     sweep: sweepTable,

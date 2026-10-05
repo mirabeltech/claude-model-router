@@ -153,6 +153,20 @@ export function renderReport(report, { color = true } = {}) {
     line(`  ${pad(name, 24)}${pad(s.n, 5)}${pad(ms(s.median), 11)}${pad(ms(s.p95), 11)}${ms(s.max)}`)
   }
 
+  /* ----------------------------------------------------- hook process health */
+  // Printed even when it is clean, and with its denominator, because the gate beside it only
+  // speaks on failure — and "nothing failed" has to be distinguishable from "no hook case ran".
+  const hp = report.hookProcess
+  if (hp !== undefined) {
+    section('Hook process')
+    const ok = hp.hookCases === hp.exitedZero && hp.hookCases === hp.emptyStderr
+    const mark = hp.hookCases === 0 ? c(DIM, 'n/a ') : ok ? c(GREEN, 'pass') : c(RED, 'FAIL')
+    line(`  ${mark} ${hp.exitedZero}/${hp.hookCases} exited 0, ${hp.emptyStderr}/${hp.hookCases} wrote no stderr`)
+    for (const i of hp.incidents) {
+      line(c(RED, `       ${i.id}: code ${i.code}, signal ${i.signal}, ${i.stderrBytes} stderr byte(s)`))
+    }
+  }
+
   /* ------------------------------------------------------------------ gates */
   section('Gates')
   // One line per GATE, not per gate-times-case: eighty-seven identical rows bury the three that

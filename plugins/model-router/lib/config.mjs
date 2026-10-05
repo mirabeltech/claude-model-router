@@ -77,9 +77,11 @@ export const DEFAULTS = Object.freeze({
       // NULL model and the dispatch failed with nothing useful to say. The escalation ladder
       // makes that the normal case rather than a corner.
       //
-      // flash rather than pro or flash-lite: it is the middle of the three the bundled pricing
-      // table knows, and the one worth escalating TO — stronger than a 7B local model, far
-      // cheaper than re-reading the file with the primary.
+      // flash, NOT flash-lite, on measurement (2026-10-05, the same 13 KB file). flash-lite is a
+      // third of the input price, but the verifier discarded 6 of its 13 answers for wrong line
+      // numbers — and a discarded answer is a paid call that saves nothing and costs the
+      // developer ~10 s before Claude reads the file anyway. Net of that, flash saved more
+      // against every Claude model measured. See docs/escalation.md.
       model: 'gemini-3.8-flash',
     },
     ollama: {

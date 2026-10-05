@@ -164,7 +164,10 @@ export function runHookProcess(stdin, env = {}) {
     child.stdout.on('data', (c) => (stdout += c))
     child.stderr.on('data', (c) => (stderr += c))
     child.on('error', reject)
-    child.on('close', (code) => resolve({ code, stdout, stderr }))
+    // `signal` is carried because a native abort is reported two different ways: Windows gives a
+    // numeric status (0xC0000409), POSIX gives `code: null` with SIGABRT. Dropping the signal would
+    // record a crash on Linux as a null exit code with nothing to explain it.
+    child.on('close', (code, signal) => resolve({ code, signal, stdout, stderr }))
     child.stdin.end(stdin)
   })
 }

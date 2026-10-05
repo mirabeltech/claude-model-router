@@ -191,6 +191,7 @@ const RANKED = Object.freeze({
   [`${ROUTER}/lib/analytics/index.mjs`]: { rank: 74, module: 'analytics' },
 
   // ---- 80 · the hook. The only composition point on the hot path, and the only impure layer.
+  [`${ROUTER}/lib/hook/exit-diagnostic.mjs`]: { rank: 80, module: 'hook' },
   [`${ROUTER}/lib/hook/facts.mjs`]: { rank: 80, module: 'hook' },
   [`${ROUTER}/lib/hook/intent.mjs`]: { rank: 81, module: 'hook' },
   [`${ROUTER}/lib/hook/run.mjs`]: { rank: 82, module: 'hook' },
@@ -269,6 +270,7 @@ const ALLOWED_TARGETS = Object.freeze({
 const BUILTINS = Object.freeze({
   // The only impure layer on the hot path, and it may use exactly two builtins.
   [`${ROUTER}/hooks/pre-tool-use.mjs`]: Object.freeze(['node:fs']),
+  [`${ROUTER}/lib/hook/exit-diagnostic.mjs`]: Object.freeze(['node:fs']),
   [`${ROUTER}/lib/hook/facts.mjs`]: Object.freeze(['node:fs']),
   [`${ROUTER}/lib/hook/intent.mjs`]: Object.freeze(['node:fs']),
   [`${ROUTER}/lib/hook/run.mjs`]: Object.freeze(['node:fs']),
