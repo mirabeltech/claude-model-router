@@ -1,6 +1,6 @@
 {
   "name": "claude-model-router",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Claude Code marketplace for model routing: delegate bulk reads and boilerplate to a cheap worker model, and measure what it saved.",
   "license": "Apache-2.0",
