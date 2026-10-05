@@ -99,6 +99,12 @@ came from the worker.
 really consumed, so it is charged whether or not the answer is kept. Discarding an answer does not
 un-spend it, and a row that hid the spend would understate what delegation costs.
 
+**And a discarded answer saves nothing, so its row claims nothing.** It is written with `status:
+skipped`, `estimated_tokens_avoided: null` and `returned_answer_chars: null` — the same shape as a
+truncation discard — while the worker usage columns keep the tokens that were spent. Analytics
+therefore files it under worker overhead, never under successes or savings. Until 2026-10-05 it was
+written as `status: ok` with the full saving, which a real discarded Gemini answer exposed.
+
 ## What it catches
 
 Measured against a real fabrication:

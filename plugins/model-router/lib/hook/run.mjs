@@ -202,6 +202,7 @@ export async function runReadHook({
               corpusChars,
               verification,
               escalation,
+              answerDiscarded: discarded,
               // The task that was actually built, which is the generic literal unless the
               // developer opted in. Still governed by `telemetry.storeQuestionText`, which is
               // false by default, so recovered prompt text is not stored merely by being used.

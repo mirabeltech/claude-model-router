@@ -164,14 +164,31 @@ export function extractUsage(meta) {
   const prompt = num(meta.promptTokenCount)
   const cached = num(meta.cachedContentTokenCount) ?? 0
   const candidates = num(meta.candidatesTokenCount)
-  const thoughts = num(meta.thoughtsTokenCount)
+  const total = num(meta.totalTokenCount)
+
+  // Gemini's JSON OMITS a zero-valued count rather than sending 0, so a call with no cache hit and
+  // no thinking arrives with neither field. Left null, either one made the strict token sum — and
+  // so every token and cost figure — unavailable on EVERY real call (measured 2026-10-05:
+  // 5805 in, 1349 out, total 7154, both fields absent). Each is resolved only as far as the
+  // response itself justifies:
+  //
+  //  - cached: when the usage block is present, an absent count is 0. That is the value the input
+  //    subtraction above has always used, and the safe direction — if it were wrong, cached input
+  //    would be priced at the full rate, overstating cost and understating savings.
+  //  - thoughts: 0 ONLY when the provider's own total proves it (total === prompt + candidates).
+  //    Otherwise null, because an unattributed remainder could be billed reasoning, and assuming
+  //    it away would understate cost — trap 2 above.
+  let thoughts = num(meta.thoughtsTokenCount)
+  if (thoughts === null && total !== null && prompt !== null && candidates !== null && total === prompt + candidates) {
+    thoughts = 0
+  }
 
   return normalizeUsage({
     // Guard the subtraction: a provider inconsistency must not yield a negative.
     inputTokens: prompt === null ? null : Math.max(0, prompt - cached),
-    cachedInputTokens: num(meta.cachedContentTokenCount) === null ? null : cached,
+    cachedInputTokens: prompt === null ? null : cached,
     outputTokens: candidates,
     thinkingTokens: thoughts,
-    totalTokens: num(meta.totalTokenCount),
+    totalTokens: total,
   })
 }

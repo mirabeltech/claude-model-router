@@ -593,3 +593,72 @@ test('H3. a summary that checks out is substituted with no caveat at all', async
     ws.cleanup()
   }
 })
+
+/* ------------- H4. a discarded summary saves nothing, and the row must say so */
+
+test('H4. a discarded summary is recorded as skipped with no saving, and its spend is kept', async () => {
+  // Found end to end on 2026-10-05 against a real worker: a summary with 1 of 2 line references
+  // wrong was discarded — Claude read the whole file itself — yet the row said `status: ok` and
+  // `estimated_tokens_avoided: 2898`. Analytics then counted it as a success, a delivered answer
+  // and a saving. CLAUDE.md's sixth rule: nothing was avoided, so nothing may be claimed.
+  const ws = makeTempDir('refuse-fabricated-row')
+  try {
+    const projectDir = path.join(ws.dir, 'project')
+    fs.mkdirSync(projectDir, { recursive: true })
+    const target = path.join(projectDir, 'big.ts')
+    fs.writeFileSync(target, PADDING.repeat(Math.ceil(48_000 / PADDING.length)))
+    const transcript = path.join(projectDir, 't.jsonl')
+    fs.writeFileSync(transcript, '')
+
+    const { runReadHook } = await import('../plugins/model-router/lib/hook/run.mjs')
+    const { buildEvent } = await import('../plugins/model-router/lib/telemetry/event.mjs')
+    const { classifyRow, predicates } = await import('../plugins/model-router/lib/analytics/predicates.mjs')
+    const { hookConfig, hookEnv } = await import('./helpers/hook-payload.mjs')
+
+    const config = hookConfig()
+    let inputs = null
+    const out = await runReadHook({
+      raw: readStdin({ cwd: projectDir, transcript_path: transcript, tool_input: { file_path: target } }),
+      config,
+      env: hookEnv('http://127.0.0.1:1'),
+      dispatchImpl: async () => ({
+        ok: true,
+        status: 'ok',
+        reason: 'completed',
+        provider: 'mock',
+        model: 'mock-1',
+        text: 'This file declares `getUserByEmail` on line 412 and `AuditLogWriter` on line 980.',
+        usage: { inputTokens: 5805, cachedInputTokens: 0, outputTokens: 478, thinkingTokens: 0, totalTokens: 6283, source: 'provider_reported' },
+        capabilities: null,
+        attempts: 1,
+        latencyMs: 5,
+        error: null,
+        promptVersion: 5,
+        policyVersion: 1,
+      }),
+      emit: (i) => {
+        inputs = i
+        return null
+      },
+    })
+
+    assert.equal(out.outcome, 'summary_unverified')
+    assert.equal(out.response, null, 'the developer got their own Read')
+    assert.ok(inputs, 'the discarded call is still recorded')
+
+    const row = buildEvent({ ...inputs, config, now: 0, eventId: 'e' })
+    assert.equal(row.status, 'skipped', 'not ok: nothing reached Claude')
+    assert.equal(row.estimated_tokens_avoided, null, 'Claude read the whole file, so nothing was avoided')
+    assert.equal(row.returned_answer_chars, null, 'nothing was returned to Claude')
+    assert.equal(row.summary_verify_verdict, 'suspect')
+    assert.equal(row.worker_input_tokens, 5805, 'the spend is kept: those tokens were consumed')
+    assert.equal(row.worker_output_tokens, 478)
+
+    assert.equal(classifyRow(row), 'delegationSkipped')
+    assert.equal(predicates.delegationOk(row), false)
+    assert.equal(predicates.answerDelivered(row), false)
+    assert.equal(predicates.noUsableAnswer(row), true, 'it is worker overhead: paid for, bought nothing')
+  } finally {
+    ws.cleanup()
+  }
+})

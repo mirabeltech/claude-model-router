@@ -1,5 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
 
 import {
   DEFAULTS,
@@ -314,3 +316,23 @@ test('$schema is accepted without being flagged as a typo', () => {
 // The shipped examples used to be checked here, for the one file that existed. They now live in
 // test/examples.test.mjs, which censuses the whole directory so a new example cannot ship
 // unvalidated, and resolves paths from import.meta.url rather than the working directory.
+
+test('every plugin userConfig default equals the shipped default it overrides', () => {
+  // Found end to end on 2026-10-05: plugin.json still offered `gemini-2.5-flash` — a model Google
+  // had retired — as worker_model's default, after DEFAULTS had moved on. Claude Code does not
+  // export an unset option, so the hook was unaffected; but anyone opening /plugin configure was
+  // shown, and could save, a model that 404s. A userConfig default is a second copy of a shipped
+  // default, so it is held to the first.
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(import.meta.dirname, '../plugins/model-router/.claude-plugin/plugin.json'), 'utf8'),
+  )
+  const byKey = new Map(Object.keys(SPEC).map((f) => [f.replace(/[.\-]/g, '_').toLowerCase(), f]))
+  const options = Object.entries(manifest.userConfig ?? {})
+  assert.ok(options.length > 0, 'the manifest must declare userConfig, or this test checks nothing')
+  for (const [key, option] of options) {
+    const field = byKey.get(key)
+    assert.ok(field, `userConfig.${key} maps to no SPEC field, so the hook would never read it`)
+    const shipped = field.split('.').reduce((o, k) => o?.[k], DEFAULTS)
+    assert.deepEqual(option.default, shipped, `userConfig.${key} default must equal DEFAULTS.${field}`)
+  }
+})

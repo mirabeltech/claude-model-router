@@ -18,7 +18,7 @@
       "type": "string",
       "title": "Worker model",
       "description": "The model id to send. It must be one the provider above actually owns: pairing ollama with a gemini model name is the single most common misconfiguration, and npm run doctor reports it as a mismatch.",
-      "default": "gemini-2.5-flash"
+      "default": "gemini-3.8-flash"
     },
     "routing_bulkread_enforce": {
       "type": "string",

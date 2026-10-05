@@ -142,6 +142,11 @@ export function buildEvent({
   contextTruncation = null,
   attempts = null,
   error = null,
+  // The answer came back but was NOT given to Claude — verification found a claim that contradicts
+  // the file and `verify.onSuspect` is `discard`. Claude then read the whole file itself, so
+  // nothing was avoided: the row is `skipped` with null savings, exactly like the truncation
+  // discard. The usage stays, because those worker tokens were really consumed.
+  answerDiscarded = false,
 
   filesCount = null,
   provenFilesCount = null,
@@ -227,17 +232,23 @@ export function buildEvent({
     countedTokens: toReportedCount(countedTokens, 'counted_tokens', warn),
   })
 
-  const answerChars = toEstimatedCount(
-    returnedAnswerChars ?? (typeof result?.text === 'string' ? result.text.length : null),
-    'returned_answer_chars',
-    warn,
-  )
-  const answerTokens = estimateAnswerTokens({
-    method: avoidedMethod,
-    chars: answerChars,
-    charsPerToken,
-    supplied: toEstimatedCount(returnedAnswerTokens, 'returned_answer_tokens', warn),
-  })
+  // Nothing was RETURNED to Claude on a discarded answer, so the column stays null rather than
+  // describing an answer nobody received.
+  const answerChars = answerDiscarded === true
+    ? null
+    : toEstimatedCount(
+        returnedAnswerChars ?? (typeof result?.text === 'string' ? result.text.length : null),
+        'returned_answer_chars',
+        warn,
+      )
+  const answerTokens = answerDiscarded === true
+    ? null
+    : estimateAnswerTokens({
+        method: avoidedMethod,
+        chars: answerChars,
+        charsPerToken,
+        supplied: toEstimatedCount(returnedAnswerTokens, 'returned_answer_tokens', warn),
+      })
 
   const delta = calculateTokenDelta({
     avoidedInputTokens: avoided.value,
@@ -287,7 +298,7 @@ export function buildEvent({
   const budget = contextBudget ?? result?.contextBudget ?? null
   const truncation = contextTruncation ?? result?.contextTruncation ?? null
 
-  const status = error ? 'error' : result ? 'ok' : 'skipped'
+  const status = error ? 'error' : result && answerDiscarded !== true ? 'ok' : 'skipped'
 
   const errorDetail = error ? (error.detail ?? error.message ?? null) : null
   const errorMessageSafe =

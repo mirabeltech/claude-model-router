@@ -71,6 +71,7 @@ export function toEventInputs({
   governance = null,
   verification = null,
   escalation = null,
+  answerDiscarded = false,
 }) {
   const dispatched = result !== null && result !== undefined
   const ok = dispatched && result.status === 'ok'
@@ -134,6 +135,7 @@ export function toEventInputs({
     // verify, and stamping a verdict on it would invent a check that never happened.
     verification: dispatched ? verification : null,
     escalation: dispatched ? escalation : null,
+    answerDiscarded: ok && answerDiscarded === true,
     primaryUsage: null,
     primaryUsageMethod: 'none',
 
