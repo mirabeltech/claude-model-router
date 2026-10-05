@@ -581,3 +581,46 @@ test('the requirement is read from each provider capability, not from a list of 
     }
   }
 })
+
+test('pricing: an override that prices the models in use passes, and the bundled nulls behind it are not counted', () => {
+  // Found 2026-10-05: with gemini-3.8-flash and the primary model priced in an override file,
+  // doctor still warned "9 model(s) have no rates" and listed gemini-3.8-flash among them,
+  // because it counted the bundled null rows that the override shadows and resolveRates() never
+  // consults.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cmr-doctor-pricing-'))
+  try {
+    const file = path.join(dir, 'pricing.json')
+    const priced = (i, o) => ({ inputPerMTok: i, cachedInputPerMTok: null, outputPerMTok: o, verify: 't', verifiedAt: '2026-10-05' })
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        pricingVersion: 't.1',
+        unit: 'per_mtok',
+        currency: 'USD',
+        models: { 'gemini:gemini-3.8-flash': priced(0.75, 3.75), 'anthropic:claude-opus-5-5': priced(4, 20) },
+      }),
+    )
+    const r = runDoctor({
+      CMR_ENABLED: 'true',
+      GEMINI_API_KEY: 'test-key-value',
+      CMR_PRICING_OVERRIDES: file,
+      CMR_PRIMARY_MODEL: 'claude-opus-5-5',
+    })
+    assert.match(r.out, /every model this install uses has rates/)
+    assert.doesNotMatch(r.out, /model\(s\) (this install uses )?have no rates/)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('pricing: the paste-ready skeleton carries no rate and no verification date', () => {
+  // It once carried 0.30 / 0.075 / 2.50 — a retired model's rates, well under half of
+  // gemini-3.8-flash's — and stamped today's date as verifiedAt. Pasted as-is, that is a confident
+  // wrong dollar figure that claims to have been checked.
+  const r = runDoctor({ CMR_ENABLED: 'true', GEMINI_API_KEY: 'test-key-value' })
+  assert.match(r.out, /1 model\(s\) this install uses have no rates/)
+  assert.match(r.out, /"gemini:gemini-3\.8-flash"/)
+  assert.match(r.out, /"inputPerMTok": null, "cachedInputPerMTok": null, "outputPerMTok": null/)
+  assert.match(r.out, /"verifiedAt": null/)
+  assert.doesNotMatch(r.out, /PerMTok": \d/)
+})

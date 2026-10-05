@@ -71,6 +71,7 @@ import { checkWritable, probeWritable, readState } from '../lib/governance/ledge
 import { resolveSinkId } from '../lib/telemetry/index.mjs'
 import { readSegmentsSync } from '../lib/telemetry/jsonl.mjs'
 import { loadPricing } from '../lib/telemetry/pricing-load.mjs'
+import { resolveRates } from '../lib/telemetry/pricing-lookup.mjs'
 import { unpricedModels } from '../lib/telemetry/pricing-table.mjs'
 
 /** What Claude Code sets CLAUDE_PLUGIN_ROOT to: the plugin directory, two levels up from here. */
@@ -813,35 +814,80 @@ let anyRateKnown = false
     ),
   )
 
-  const unpriced = chain.flatMap((e) => unpricedModels(e.table))
-  if (unpriced.length > 0) {
+  // A row is unpriced only if no HIGHER-priority table names it: resolveRates() takes the first
+  // table that has the key, so a bundled null behind a priced override is never consulted. Counting
+  // it anyway made doctor report gemini-3.8-flash as unpriced on an install that had priced it.
+  const named = new Set()
+  const unpriced = []
+  for (const e of chain) {
+    for (const row of unpricedModels(e.table)) if (!named.has(row.key)) unpriced.push(row)
+    for (const key of Object.keys(e.table.models ?? {})) named.add(key)
+  }
+
+  // The rows that decide whether THIS install shows dollars: every worker a lane resolves to, and
+  // the primary model the counterfactual saving is priced at. The rest of the bundled table is
+  // models nobody here calls, and reporting them as a warning hid the one answer that matters.
+  const isPriced = (provider, model) => {
+    const r = resolveRates(chain, { provider, servedModel: model, requestedModel: model })
+    return r.rates !== null && (r.rates.inputPerMTok !== null || r.rates.outputPerMTok !== null)
+  }
+  const used = new Map()
+  for (const lane of Object.keys(LANE_MODE)) {
+    const r = resolveWorker(config, lane)
+    if (r.provider && r.model) used.set(`${r.provider}:${r.model}`, [r.provider, r.model])
+  }
+  const primaryModel = config?.telemetry?.primaryModel ?? null
+  if (primaryModel) used.set(`anthropic:${primaryModel}`, ['anthropic', primaryModel])
+  const usedUnpriced = [...used].filter(([, [p, m]]) => !isPriced(p, m)).map(([key]) => key)
+
+  if (usedUnpriced.length > 0) {
     s.findings.push(
       warn(
-        `${unpriced.length} model(s) have no rates`,
+        `${usedUnpriced.length} model(s) this install uses have no rates`,
         'token savings are still reported; every DOLLAR figure stays NULL until rates are set',
       ),
     )
-    for (const row of unpriced.slice(0, 6)) s.findings.push(info(row.key, `verify at ${row.verify}`))
-    if (unpriced.length > 6) s.findings.push(info(`...and ${unpriced.length - 6} more`))
+    for (const key of usedUnpriced) {
+      const row = unpriced.find((u) => u.key === key)
+      s.findings.push(info(key, row ? `verify at ${row.verify}` : 'not in any pricing table — add a row'))
+    }
 
     // The bundled table ships every rate null on purpose: a confident wrong dollar figure is
     // worse than a refusal to price. But a null nobody explains reads as a bug, so hand over the
     // exact snippet to paste. Kept as a raw block rather than one finding per line — prefixing
     // nine lines of JSON with INFO would destroy the one property it has.
+    //
+    // The rates are null and the date is null, deliberately. This block once carried sample
+    // numbers and today's date, and the numbers were a retired model's: pasted as-is, they priced
+    // gemini-3.8-flash at well under half its real rate and stamped that as verified today. A
+    // skeleton must not contain a figure anyone could mistake for a looked-up one.
     s.note.push(
-      'To price them, write a table and point pricing.overrides at it:',
+      'To price them, write a table and point pricing.overrides at it (its FULL path).',
+      `Replace each null with the per-million rate from the verify page, and set verifiedAt to the day you checked:`,
       '{',
       '  "pricingVersion": "my-rates.1", "unit": "per_mtok", "currency": "USD",',
       '  "models": {',
-      `    "${unpriced[0].key}": {`,
-      '      "inputPerMTok": 0.30, "cachedInputPerMTok": 0.075, "outputPerMTok": 2.50,',
-      `      "verify": "${unpriced[0].verify}", "verifiedAt": "${new Date().toISOString().slice(0, 10)}"`,
+      `    "${usedUnpriced[0]}": {`,
+      '      "inputPerMTok": null, "cachedInputPerMTok": null, "outputPerMTok": null,',
+      `      "verify": "${unpriced.find((u) => u.key === usedUnpriced[0])?.verify ?? 'the provider pricing page'}", "verifiedAt": null`,
       '    }',
       '  }',
       '}',
     )
+  } else if (!primaryModel) {
+    s.findings.push(
+      warn(
+        'telemetry.primaryModel is not set',
+        'the worker is priced, but the saving is priced at the Claude model the read would have gone to — set telemetry.primaryModel',
+      ),
+    )
   } else {
-    s.findings.push(pass('every model in the chain has rates', 'dollar figures will be populated'))
+    s.findings.push(
+      pass('every model this install uses has rates', `${[...used.keys()].join(', ')} — dollar figures will be populated`),
+    )
+    if (unpriced.length > 0) {
+      s.findings.push(info(`${unpriced.length} other model(s) unpriced`, 'none of them is used by this configuration'))
+    }
   }
 }
 
