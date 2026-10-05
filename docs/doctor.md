@@ -111,11 +111,11 @@ measured capability" applies to a version string too.
 {
   "schemaVersion": 1,
   "tool": "router-doctor",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "generatedAt": "2026-10-04T12:00:00.000Z",
   "mode": { "live": false, "offline": true, "probeWrites": false },
   "project": {
-    "plugin": { "name": "model-router", "version": "1.0.1" },
+    "plugin": { "name": "model-router", "version": "1.0.2" },
     "pluginRoot": "...",
     "node": "24.16.0",
     "platform": "win32",

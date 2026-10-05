@@ -1,7 +1,7 @@
 {
   "name": "model-router",
   "displayName": "Model Router",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Keeps Claude as the primary reasoning agent while shunting bulk file reading to a cheap worker model. A PreToolUse hook gates large reads, the gate fails open so a broken worker degrades to plain Claude Code, and every delegation is measured. Slash commands expose the diagnostic and the report.",
   "author": { "name": "Mirabel Technologies" },
   "repository": "https://github.com/mirabeltech/claude-model-router",
